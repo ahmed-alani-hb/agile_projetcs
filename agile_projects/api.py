@@ -8,9 +8,23 @@ child rows and low-sensitivity lookup lists (employees, activity types) use
 
 import frappe
 from frappe import _
+from frappe.query_builder.functions import Count, Sum
 from frappe.utils import add_to_date, flt, get_datetime, now_datetime
 
 from agile_projects.overrides.task import AGILE_STATUSES, DONE
+
+
+def _sum_logged_hours(task):
+    """Total submitted hours for a task. Uses the query builder because recent
+    Frappe rejects SQL functions passed as strings in a `fields` list."""
+    tsd = frappe.qb.DocType("Timesheet Detail")
+    result = (
+        frappe.qb.from_(tsd)
+        .select(Sum(tsd.hours).as_("total_hours"))
+        .where((tsd.task == task) & (tsd.docstatus == 1))
+        .run(as_dict=True)
+    )
+    return flt(result[0].total_hours) if result and result[0].total_hours else 0
 
 ALLOWED_ROLES = {"System Manager", "Projects Manager", "Projects User"}
 
@@ -78,11 +92,23 @@ def get_projects():
         return []
 
     names = [p.name for p in projects]
-    task_counts = frappe.get_all(
-        "Task",
-        filters={"project": ["in", names], "is_group": 0, "is_template": 0},
-        fields=["project", "status", "count(name) as count"],
-        group_by="project, status",
+    # Recent Frappe blocks SQL functions passed as strings in `fields`; use the
+    # query builder for the grouped count instead.
+    task_table = frappe.qb.DocType("Task")
+    task_counts = (
+        frappe.qb.from_(task_table)
+        .select(
+            task_table.project,
+            task_table.status,
+            Count(task_table.name).as_("count"),
+        )
+        .where(
+            task_table.project.isin(names)
+            & (task_table.is_group == 0)
+            & (task_table.is_template == 0)
+        )
+        .groupby(task_table.project, task_table.status)
+        .run(as_dict=True)
     )
     checklist_rows = frappe.get_all(
         "ERP Module Readiness Checklist",
@@ -264,12 +290,7 @@ def get_task(task):
         if info:
             depends_on.append(info)
 
-    hours = frappe.get_all(
-        "Timesheet Detail",
-        filters={"task": doc.name, "docstatus": 1},
-        fields=["sum(hours) as total_hours"],
-    )
-    total_hours = flt(hours[0].total_hours) if hours else 0
+    total_hours = _sum_logged_hours(doc.name)
 
     out = {
         field: doc.get(field)
@@ -571,13 +592,7 @@ def get_task_timesheets(task):
             row["employee"] = ts.employee if ts else None
             row["employee_name"] = ts.employee_name if ts else None
 
-    totals = frappe.get_all(
-        "Timesheet Detail",
-        filters={"task": task, "docstatus": 1},
-        fields=["sum(hours) as total_hours"],
-    )
-    total_hours = flt(totals[0].total_hours) if totals else 0
-    return {"logs": logs, "total_hours": total_hours}
+    return {"logs": logs, "total_hours": _sum_logged_hours(task)}
 
 
 # ---------------------------------------------------------------------------
