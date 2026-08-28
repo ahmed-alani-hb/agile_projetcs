@@ -1,6 +1,16 @@
+// Frappe date fields are plain 'YYYY-MM-DD' strings; new Date() would parse
+// them as UTC midnight, shifting the displayed day for users west of UTC.
+function parseLocalDate(value) {
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split('-').map(Number)
+    return new Date(year, month - 1, day)
+  }
+  return new Date(String(value).replace(' ', 'T'))
+}
+
 export function formatDate(value) {
   if (!value) return ''
-  const date = new Date(value)
+  const date = parseLocalDate(value)
   if (isNaN(date)) return value
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
@@ -19,10 +29,31 @@ export function formatDateTime(value) {
 
 export function isOverdue(value) {
   if (!value) return false
-  const date = new Date(value)
+  const date = parseLocalDate(value)
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   return date < today
+}
+
+// Task.description is a Text Editor (HTML) field in ERPNext. The SPA edits it
+// as plain text, so convert at the boundary in both directions. Rich
+// formatting entered in Desk is flattened if the description is then edited
+// from the SPA.
+export function htmlToText(html) {
+  if (!html) return ''
+  const withBreaks = String(html)
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|h[1-6]|tr)>/gi, '\n')
+  const el = document.createElement('div')
+  el.innerHTML = withBreaks
+  return (el.textContent || '').replace(/\n{3,}/g, '\n\n').trim()
+}
+
+export function textToHtml(text) {
+  if (!text) return ''
+  const el = document.createElement('div')
+  el.textContent = text
+  return el.innerHTML.replace(/\n/g, '<br>')
 }
 
 export function initials(name) {

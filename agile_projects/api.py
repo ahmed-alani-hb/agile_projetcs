@@ -8,7 +8,7 @@ child rows and low-sensitivity lookup lists (employees, activity types) use
 
 import frappe
 from frappe import _
-from frappe.utils import add_to_date, flt, now_datetime
+from frappe.utils import add_to_date, flt, get_datetime, now_datetime
 
 from agile_projects.overrides.task import AGILE_STATUSES, DONE
 
@@ -80,7 +80,7 @@ def get_projects():
     names = [p.name for p in projects]
     task_counts = frappe.get_all(
         "Task",
-        filters={"project": ["in", names], "is_template": 0},
+        filters={"project": ["in", names], "is_group": 0, "is_template": 0},
         fields=["project", "status", "count(name) as count"],
         group_by="project, status",
     )
@@ -137,9 +137,11 @@ def get_board(project):
     if not meta:
         frappe.throw(_("Project {0} not found").format(project), frappe.DoesNotExistError)
 
+    # Group tasks are tree containers, not workable cards; the progress
+    # calculation excludes them too, so counts and percent stay consistent.
     tasks = frappe.get_list(
         "Task",
-        filters={"project": project, "is_template": 0},
+        filters={"project": project, "is_group": 0, "is_template": 0},
         fields=[
             "name",
             "subject",
@@ -476,8 +478,31 @@ def log_time(task, hours, activity_type, description=None, from_time=None):
             ).format(frappe.session.user)
         )
 
-    from_time = from_time or now_datetime()
-    to_time = add_to_date(from_time, hours=hours, as_datetime=True)
+    if from_time:
+        # Use a window the user chose verbatim.
+        from_time = get_datetime(from_time)
+        to_time = add_to_date(from_time, hours=hours, as_datetime=True)
+    else:
+        # Anchor the end at now and backdate the start: projecting the hours
+        # into the future would make every back-to-back log collide with
+        # ERPNext's employee overlap validation.
+        to_time = now_datetime()
+        from_time = add_to_date(to_time, hours=-hours, as_datetime=True)
+        latest_end = frappe.db.sql(
+            """
+            select max(tsd.to_time)
+            from `tabTimesheet Detail` tsd
+            join `tabTimesheet` ts on tsd.parent = ts.name
+            where ts.employee = %s and ts.docstatus < 2 and tsd.to_time > %s
+            """,
+            (employee.name, from_time),
+        )
+        latest_end = latest_end[0][0] if latest_end and latest_end[0] else None
+        if latest_end and get_datetime(latest_end) > from_time:
+            # Shift the whole window past the last existing log, keeping its
+            # length == hours (ERPNext recomputes hours from the window).
+            from_time = get_datetime(latest_end)
+            to_time = add_to_date(from_time, hours=hours, as_datetime=True)
 
     timesheet = frappe.get_doc(
         {
@@ -498,8 +523,19 @@ def log_time(task, hours, activity_type, description=None, from_time=None):
             ],
         }
     )
-    timesheet.insert()
-    timesheet.submit()
+    from erpnext.projects.doctype.timesheet.timesheet import OverlapError
+
+    try:
+        timesheet.insert()
+        timesheet.submit()
+    except OverlapError:
+        frappe.throw(
+            _(
+                "This window ({0} – {1}) overlaps one of your existing time logs. "
+                "Pick an explicit start time and try again."
+            ).format(from_time, to_time),
+            OverlapError,
+        )
 
     return {
         "timesheet": timesheet.name,
@@ -512,6 +548,7 @@ def log_time(task, hours, activity_type, description=None, from_time=None):
 @frappe.whitelist()
 def get_task_timesheets(task):
     _ensure_app_access()
+    frappe.has_permission("Task", doc=task, throw=True)
     logs = frappe.get_all(
         "Timesheet Detail",
         filters={"task": task, "docstatus": 1},
@@ -534,7 +571,13 @@ def get_task_timesheets(task):
             row["employee"] = ts.employee if ts else None
             row["employee_name"] = ts.employee_name if ts else None
 
-    return {"logs": logs, "total_hours": sum(flt(row.hours) for row in logs)}
+    totals = frappe.get_all(
+        "Timesheet Detail",
+        filters={"task": task, "docstatus": 1},
+        fields=["sum(hours) as total_hours"],
+    )
+    total_hours = flt(totals[0].total_hours) if totals else 0
+    return {"logs": logs, "total_hours": total_hours}
 
 
 # ---------------------------------------------------------------------------
@@ -557,7 +600,8 @@ def get_employees(txt=""):
         or_filters=or_filters,
         fields=["name", "employee_name", "designation", "user_id", "image"],
         order_by="employee_name asc",
-        limit_page_length=100,
+        # the picker filters client-side over this list; cap defensively
+        limit_page_length=1000,
     )
 
 

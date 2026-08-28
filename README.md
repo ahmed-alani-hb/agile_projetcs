@@ -71,8 +71,14 @@ an active **Employee** record whose *User ID* is the logged-in user.
 - Custom fields: `Task.complexity_points`, `Task.sme_responsible`,
   `Project.erp_module_readiness` (Table → *ERP Module Readiness Checklist*)
 - `override_doctype_class` for **Task** (`AgileTask`): dependency gate,
-  Done→100% progress, completion stamps, and a no-op `update_status` so the
-  daily "Overdue" scheduler cannot write an out-of-options status
+  Done→100% progress, completion stamps, dependent-task rescheduling keyed
+  on Backlog/To Do, auto-start to In Progress on the first submitted
+  timesheet (only when unblocked), and a no-op `update_status` so the daily
+  "Overdue" scheduler cannot write an out-of-options status
+- `override_doctype_class` for **Project** (`AgileProject`): percent and
+  status derivation adapted to agile statuses (core would otherwise pin
+  every project's status to "Open"); Completed at 100%, Manual method and
+  Cancelled/On hold respected
 - Doc events recompute `Project.percent_complete` (ERPNext's own
   calculation counts statuses that no longer exist)
 

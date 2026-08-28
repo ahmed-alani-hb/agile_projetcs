@@ -91,7 +91,7 @@
                   rows="4"
                   class="mt-1 w-full rounded-md border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500"
                   placeholder="Add a description…"
-                  @change="saveField('description', form.description)"
+                  @change="saveField('description', textToHtml(form.description))"
                 ></textarea>
               </div>
 
@@ -234,7 +234,7 @@ import EmployeePicker from './EmployeePicker.vue'
 import ChecklistSection from './ChecklistSection.vue'
 import TimesheetSection from './TimesheetSection.vue'
 import { STATUSES, STATUS_META, POINT_OPTIONS, PRIORITIES } from '@/utils/statuses'
-import { formatHours } from '@/utils/format'
+import { formatHours, htmlToText, textToHtml } from '@/utils/format'
 import { toast, errorMessage } from '@/utils/toast'
 
 const props = defineProps({
@@ -267,7 +267,7 @@ const detail = createResource({
   url: 'agile_projects.api.get_task',
   onSuccess(data) {
     form.subject = data.subject || ''
-    form.description = data.description || ''
+    form.description = htmlToText(data.description)
     form.priority = data.priority || 'Medium'
     form.complexity_points = data.complexity_points || ''
     form.sme_responsible = data.sme_responsible || null

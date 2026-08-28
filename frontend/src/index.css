@@ -31,6 +31,13 @@ body {
   opacity: 0;
 }
 
+/* frappe-ui popovers (Autocomplete dropdown etc.) must paint above the
+   z-50 task-detail slide-over; reka-ui copies this computed z-index onto
+   its fixed-position portal wrapper. */
+.PopoverContent {
+  z-index: 60;
+}
+
 /* Thin scrollbars for kanban columns */
 .thin-scrollbar::-webkit-scrollbar {
   width: 6px;

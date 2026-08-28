@@ -5,12 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build --base=/assets/agile_projects/frontend/ && npm run copy-html-entry",
+    "build": "vite build --base=/assets/agile_projects/frontend/ && yarn copy-html-entry",
     "copy-html-entry": "cp ../agile_projects/public/frontend/index.html ../agile_projects/www/agile.html"
   },
   "dependencies": {
     "feather-icons": "^4.29.1",
-    "frappe-ui": "^0.1.278",
+    "frappe-ui": "0.1.278",
     "vue": "^3.5.13",
     "vue-router": "^4.4.5",
     "vuedraggable": "^4.1.0"

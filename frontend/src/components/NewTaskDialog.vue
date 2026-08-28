@@ -85,6 +85,7 @@ import { nextTick, ref, watch } from 'vue'
 import { Button, Dialog, createResource } from 'frappe-ui'
 import EmployeePicker from './EmployeePicker.vue'
 import { STATUSES, POINT_OPTIONS, PRIORITIES } from '@/utils/statuses'
+import { textToHtml } from '@/utils/format'
 import { toast, errorMessage } from '@/utils/toast'
 
 const props = defineProps({
@@ -128,7 +129,7 @@ function create() {
     .submit({
       project: props.project,
       subject: subject.value.trim(),
-      description: description.value || null,
+      description: textToHtml(description.value) || null,
       status: status.value,
       priority: priority.value,
       complexity_points: points.value || null,

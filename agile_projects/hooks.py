@@ -32,18 +32,19 @@ add_to_apps_screen = [
 # ERPNext extensions
 # ---------------------------------------------------------------------------
 
-# Custom Task controller: agile status workflow + strict dependency gate.
+# AgileTask: agile status workflow + strict dependency gate.
+# AgileProject: percent_complete/status derivation adapted to agile statuses
+# (core's calculation counts "Completed"/"Cancelled" tasks, which no longer
+# exist, and would revert every project's status to "Open").
 override_doctype_class = {
     "Task": "agile_projects.overrides.task.AgileTask",
+    "Project": "agile_projects.overrides.project.AgileProject",
 }
 
 doc_events = {
     "Task": {
         "on_update": "agile_projects.progress.on_task_change",
         "after_delete": "agile_projects.progress.on_task_change",
-    },
-    "Project": {
-        "validate": "agile_projects.progress.on_project_validate",
     },
 }
 

@@ -1,3 +1,4 @@
+import colors from 'tailwindcss/colors'
 import frappeUIPreset from 'frappe-ui/tailwind'
 
 export default {
@@ -8,6 +9,12 @@ export default {
     './node_modules/frappe-ui/src/components/**/*.{vue,js,ts,jsx,tsx}',
   ],
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        // the frappe-ui preset REPLACES tailwind's palette and ships no
+        // indigo family; restore it for our accent color
+        indigo: colors.indigo,
+      },
+    },
   },
 }

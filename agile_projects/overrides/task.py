@@ -1,7 +1,7 @@
 import frappe
 from frappe import _
 from frappe.desk.form.assign_to import close_all_assignments
-from frappe.utils import flt, nowdate
+from frappe.utils import add_days, date_diff, flt, getdate, nowdate
 
 from erpnext.projects.doctype.task.task import Task
 
@@ -48,22 +48,31 @@ class AgileTask(Task):
         if self.status in ("In Progress", DONE):
             self.validate_dependencies_done()
 
-    def validate_dependencies_done(self):
-        """Strict gate: a task cannot start (or finish) while any task it
-        depends on is not Done."""
+    def get_unmet_dependencies(self):
+        """(task, status) pairs for every dependency that is not Done."""
         unmet = []
         for row in self.depends_on or []:
             if not row.task:
                 continue
             dep_status = frappe.db.get_value("Task", row.task, "status")
             if dep_status != DONE:
-                unmet.append(_("{0} ({1})").format(frappe.bold(row.task), _(dep_status or "Unknown")))
+                unmet.append((row.task, dep_status))
+        return unmet
+
+    def validate_dependencies_done(self):
+        """Strict gate: a task cannot start (or finish) while any task it
+        depends on is not Done."""
+        unmet = self.get_unmet_dependencies()
         if unmet:
+            details = ", ".join(
+                _("{0} ({1})").format(frappe.bold(task), _(status or "Unknown"))
+                for task, status in unmet
+            )
             frappe.throw(
                 _("Cannot move task {0} to {1}: dependent tasks are not Done yet — {2}").format(
                     frappe.bold(self.name or self.subject),
                     frappe.bold(_(self.status)),
-                    ", ".join(unmet),
+                    details,
                 ),
                 AgileDependencyError,
                 title=_("Blocked by Dependencies"),
@@ -94,3 +103,43 @@ class AgileTask(Task):
         # scheduler would otherwise db_set the out-of-options "Overdue" status,
         # bypassing validation entirely.
         return
+
+    def update_time_and_costing(self):
+        # Core auto-starts an "Open" task when a timesheet against it is
+        # submitted ("Open" → "Working"); mirror that for the agile statuses,
+        # but only when the dependency gate would allow starting — otherwise
+        # the whole Timesheet submission would fail on validate_status.
+        super().update_time_and_costing()
+        if self.status in ("Backlog", "To Do") and not self.get_unmet_dependencies():
+            self.status = "In Progress"
+
+    def reschedule_dependent_tasks(self):
+        # Core body (v15) verbatim except for the status guard: only tasks
+        # with status "Open" were reschedulable, a status that no longer
+        # exists — the agile not-started statuses take its place.
+        end_date = self.exp_end_date or self.act_end_date
+        if not end_date:
+            return
+        for task_name in frappe.db.sql(
+            """
+            select name from `tabTask` as parent
+            where parent.project = %(project)s
+                and parent.name in (
+                    select parent from `tabTask Depends On` as child
+                    where child.task = %(task)s and child.project = %(project)s)
+            """,
+            {"project": self.project, "task": self.name},
+            as_dict=1,
+        ):
+            task = frappe.get_doc("Task", task_name.name)
+            if (
+                task.exp_start_date
+                and task.exp_end_date
+                and task.exp_start_date < getdate(end_date)
+                and task.status in ("Backlog", "To Do")
+            ):
+                task_duration = date_diff(task.exp_end_date, task.exp_start_date)
+                task.exp_start_date = add_days(end_date, 1)
+                task.exp_end_date = add_days(task.exp_start_date, task_duration)
+                task.flags.ignore_recursion_check = True
+                task.save()
