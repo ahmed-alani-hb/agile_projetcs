@@ -55,7 +55,7 @@
         :project="projectId"
         :filters="filters"
         @open-task="openTask"
-        @changed="onProgressRefresh"
+        @changed="onViewChanged"
       />
       <TaskTableView
         v-else-if="view === 'table'"
@@ -63,7 +63,7 @@
         :project="projectId"
         :filters="filters"
         @open-task="openTask"
-        @changed="onProgressRefresh"
+        @changed="onViewChanged"
       />
       <TimelineView
         v-else-if="view === 'timeline'"
@@ -71,7 +71,7 @@
         :project="projectId"
         :filters="filters"
         @open-task="openTask"
-        @changed="onProgressRefresh"
+        @changed="onViewChanged"
       />
       <CalendarView
         v-else-if="view === 'calendar'"
@@ -79,14 +79,14 @@
         :project="projectId"
         :filters="filters"
         @open-task="openTask"
-        @changed="onProgressRefresh"
+        @changed="onViewChanged"
       />
     </main>
 
     <TaskDetailModal
       v-model="showDetail"
       :task-name="selectedTask"
-      @task-updated="onProgressRefresh"
+      @task-updated="onExternalChange"
       @progress="onProgress"
     />
 
@@ -175,13 +175,21 @@ function onProgress(value) {
   }
 }
 
-function onProgressRefresh() {
+// A view edited its own row and already updated its local state; reloading it
+// here would reset pagination and throw away pages the user has loaded.
+function onViewChanged() {
+  meta.reload()
+}
+
+// Edits made outside the view (drawer, new task) are not reflected in its
+// local state, so the view does need a reload.
+function onExternalChange() {
   meta.reload()
   activeView.value?.reload?.()
 }
 
 function onTaskCreated() {
   showNewTask.value = false
-  onProgressRefresh()
+  onExternalChange()
 }
 </script>

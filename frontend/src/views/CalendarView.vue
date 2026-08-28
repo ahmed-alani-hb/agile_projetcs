@@ -29,12 +29,14 @@ const props = defineProps({
 
 const emit = defineEmits(['open-task', 'changed'])
 
+// Only these keys exist in frappe-ui's colorMap (calendarUtils.js); anything
+// else silently falls back and makes distinct statuses look identical.
 const STATUS_COLOR = {
-  Backlog: 'gray',
+  Backlog: 'cyan',
   'To Do': 'blue',
   'In Progress': 'amber',
   'QA/Code Review': 'violet',
-  Blocked: 'red',
+  Blocked: 'pink',
   Done: 'green',
 }
 
@@ -67,19 +69,21 @@ const events = computed(() =>
       id: task.name,
       title: task.subject,
       participant: task.sme_name || '',
-      // tasks are all-day; the calendar still expects a time window
-      fromDate: task.exp_start_date || task.exp_end_date,
+      // The calendar keys an event to fromDate only (toDate never spans cells),
+      // so place tasks on their DUE date to match the caption and the sort.
+      fromDate: task.exp_end_date,
       toDate: task.exp_end_date,
       fromTime: '09:00',
       toTime: '17:00',
-      color: STATUS_COLOR[task.status] || 'gray',
+      color: STATUS_COLOR[task.status] || 'blue',
     }))
 )
 
 const undatedCount = computed(() => allTasks.value.filter((t) => !t.exp_end_date).length)
 
-function onEventClick(event) {
-  const id = event?.id || event
+function onEventClick(payload) {
+  // frappe-ui invokes onClick as onClick({ e, calendarEvent }) — useEventBase.js
+  const id = payload?.calendarEvent?.id ?? payload?.id ?? payload
   const task = allTasks.value.find((t) => t.name === id)
   if (task) emit('open-task', task)
 }

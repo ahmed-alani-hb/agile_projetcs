@@ -2,7 +2,7 @@
   <div class="h-full overflow-y-auto px-4 py-4 sm:px-6">
     <div class="mb-3 flex items-center gap-2">
       <span class="text-sm text-gray-500">
-        {{ tasks.data?.total || 0 }} task{{ (tasks.data?.total || 0) === 1 ? '' : 's' }}
+        {{ rows.length }}{{ hasMore ? '+' : '' }} task{{ rows.length === 1 ? '' : 's' }}
       </span>
       <span class="flex-1"></span>
       <label class="text-xs text-gray-500">Group by</label>
@@ -127,7 +127,9 @@ const tasks = createResource({
   }),
   auto: true,
   onSuccess(data) {
-    rows.value = start.value === 0 ? data.tasks : [...rows.value, ...data.tasks]
+    // key off the offset the SERVER echoes back: start.value may already have
+    // moved on by the time a slow response lands
+    rows.value = data.start === 0 ? data.tasks : [...rows.value, ...data.tasks]
   },
   onError(err) {
     toast({ title: 'Failed to load tasks', text: errorMessage(err), type: 'error' })
@@ -143,7 +145,7 @@ watch(
   { deep: true }
 )
 
-const hasMore = computed(() => rows.value.length < (tasks.data?.total || 0))
+const hasMore = computed(() => !!tasks.data?.has_more)
 
 function loadMore() {
   start.value = rows.value.length

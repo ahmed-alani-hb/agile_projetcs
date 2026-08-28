@@ -3,7 +3,7 @@
     <!-- toolbar -->
     <div class="flex items-center gap-2 border-b border-gray-200 bg-white px-4 py-1.5 sm:px-6">
       <span class="text-xs text-gray-500">
-        {{ rows.length }} of {{ tasks.data?.total || 0 }}
+        {{ rows.length }}{{ hasMore ? '+' : '' }} task{{ rows.length === 1 ? '' : 's' }}
       </span>
       <span class="flex-1"></span>
       <Dropdown :options="columnOptions">
@@ -42,9 +42,7 @@
         <option v-for="p in POINT_OPTIONS" :key="p" :value="p">{{ p }} pts</option>
       </select>
       <span class="flex-1"></span>
-      <Button variant="ghost" size="sm" :loading="bulk.loading" @click="selected.clear()">
-        Clear selection
-      </Button>
+      <Button variant="ghost" size="sm" @click="selected.clear()">Clear selection</Button>
     </div>
 
     <!-- grid -->
@@ -252,7 +250,8 @@ const tasks = createResource({
   }),
   auto: true,
   onSuccess(data) {
-    rows.value = start.value === 0 ? data.tasks : [...rows.value, ...data.tasks]
+    // use the server-echoed offset, not the possibly-advanced local ref
+    rows.value = data.start === 0 ? data.tasks : [...rows.value, ...data.tasks]
   },
   onError(err) {
     toast({ title: 'Failed to load tasks', text: errorMessage(err), type: 'error' })
@@ -278,7 +277,7 @@ watch(
   { deep: true }
 )
 
-const hasMore = computed(() => rows.value.length < (tasks.data?.total || 0))
+const hasMore = computed(() => !!tasks.data?.has_more)
 const allSelected = computed(() => rows.value.length > 0 && selected.size === rows.value.length)
 
 function loadMore() {

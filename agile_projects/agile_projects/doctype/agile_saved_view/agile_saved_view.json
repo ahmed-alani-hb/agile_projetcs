@@ -92,7 +92,7 @@
    "label": "Group By"
   }
  ],
- "index_web_pages_for_search": 1,
+ "index_web_pages_for_search": 0,
  "links": [],
  "modified": "2026-08-28 12:00:00.000000",
  "modified_by": "Administrator",
@@ -103,21 +103,24 @@
   {
    "create": 1,
    "delete": 1,
-   "email": 1,
-   "print": 1,
+   "if_owner": 1,
    "read": 1,
    "role": "Projects User",
-   "share": 1,
    "write": 1
   },
   {
    "create": 1,
    "delete": 1,
-   "email": 1,
-   "print": 1,
+   "if_owner": 1,
+   "read": 1,
+   "role": "Projects Manager",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
    "read": 1,
    "role": "System Manager",
-   "share": 1,
    "write": 1
   }
  ],

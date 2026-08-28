@@ -70,16 +70,28 @@ def _build_filters(project=None, filters=None):
     if points:
         out["complexity_points"] = ["in", points] if isinstance(points, (list, tuple)) else points
 
-    if filters.get("from_date") and filters.get("to_date"):
-        out["exp_end_date"] = ["between", [filters["from_date"], filters["to_date"]]]
-    elif filters.get("from_date"):
-        out["exp_end_date"] = [">=", filters["from_date"]]
-    elif filters.get("to_date"):
-        out["exp_end_date"] = ["<=", filters["to_date"]]
-
+    # Date bounds are collected first and combined, so an `overdue` flag
+    # narrows the user's date range instead of replacing it.
+    from_date = filters.get("from_date")
+    to_date = filters.get("to_date")
     if filters.get("overdue"):
-        out["exp_end_date"] = ["<", nowdate()]
-        out["status"] = ["!=", DONE]
+        today = nowdate()
+        to_date = min(to_date, today) if to_date else today
+        if "status" in out:
+            # keep the explicit status filter; only exclude Done when the user
+            # did not ask for a specific status
+            if out["status"] == DONE:
+                # "overdue AND Done" cannot match — return an impossible filter
+                out["name"] = ["is", "not set"]
+        else:
+            out["status"] = ["!=", DONE]
+
+    if from_date and to_date:
+        out["exp_end_date"] = ["between", [from_date, to_date]]
+    elif from_date:
+        out["exp_end_date"] = [">=", from_date]
+    elif to_date:
+        out["exp_end_date"] = ["<", to_date] if filters.get("overdue") else ["<=", to_date]
 
     search = (filters.get("search") or "").strip()
     if search:
@@ -152,39 +164,45 @@ def get_tasks_list(
     else:
         select_fields = list(LIST_FIELDS)
 
+    start = cint(start)
+    limit = cint(page_length) or 100
+
+    # Fetch one extra row to learn whether another page exists, instead of
+    # counting the whole table on every request.
     tasks = frappe.get_list(
         "Task",
         filters=query_filters,
         or_filters=or_filters,
         fields=select_fields,
         order_by=_safe_order_by(order_by),
-        start=cint(start),
-        page_length=cint(page_length) or 100,
+        start=start,
+        page_length=limit + 1,
     )
+    has_more = len(tasks) > limit
+    tasks = tasks[:limit]
     _decorate(tasks)
 
-    total = frappe.get_list(
-        "Task",
-        filters=query_filters,
-        or_filters=or_filters,
-        limit_page_length=0,
-        as_list=True,
-        fields=["name"],
-    )
-
-    return {"tasks": tasks, "total": len(total), "start": cint(start)}
+    return {"tasks": tasks, "has_more": has_more, "start": start}
 
 
 def _safe_order_by(order_by):
-    """Only allow `<known field> asc|desc` so the client can't inject SQL."""
+    """Only allow `<known field> asc|desc` so the client can't inject SQL.
+
+    A `name` tiebreaker is always appended: offset pagination over a
+    non-unique key (exp_end_date, modified) otherwise duplicates and drops
+    rows between pages.
+    """
+    tiebreak = "`tabTask`.`name` asc"
     if not order_by:
-        return "modified desc"
+        return f"`tabTask`.`modified` desc, {tiebreak}"
     parts = str(order_by).strip().split()
     field = parts[0]
     direction = parts[1].lower() if len(parts) > 1 else "asc"
     if field not in LIST_FIELDS or direction not in ("asc", "desc"):
-        return "modified desc"
-    return f"`tabTask`.`{field}` {direction}"
+        return f"`tabTask`.`modified` desc, {tiebreak}"
+    if field == "name":
+        return f"`tabTask`.`name` {direction}"
+    return f"`tabTask`.`{field}` {direction}, {tiebreak}"
 
 
 @frappe.whitelist(methods=["POST"])
@@ -224,8 +242,19 @@ def bulk_update_tasks(tasks, fields):
 
 
 def _clean_error(exc):
+    """Human-readable reason for a per-task failure.
+
+    frappe.throw stashes the text in frappe.message_log rather than on the
+    exception, and PermissionError often stringifies to nothing at all.
+    """
     message = getattr(exc, "message", None) or str(exc)
-    return frappe.utils.strip_html(str(message)).strip()
+    if not str(message).strip():
+        log = frappe.get_message_log() if hasattr(frappe, "get_message_log") else []
+        if log:
+            last = log[-1]
+            message = last.get("message") if isinstance(last, dict) else str(last)
+    message = frappe.utils.strip_html(str(message or "")).strip()
+    return message or _("Not permitted")
 
 
 # ---------------------------------------------------------------------------
@@ -296,13 +325,22 @@ def _duration_days(task):
 def compute_critical_path(tasks, edges):
     """Classic CPM forward/backward pass over the dependency DAG.
 
-    Works in day offsets rather than calendar dates so tasks without dates
-    still participate. Returns the set of zero-slack task names. Cycles are
-    ignored defensively (ERPNext blocks them via check_recursion).
+    Anchored to real calendar dates: a task starts no earlier than its own
+    scheduled `exp_start_date`, so the result matches the chart the bars are
+    drawn on. Only dated tasks participate — undated ones are not rendered on
+    the timeline and must not shift the computed finish date. Returns the set
+    of zero-slack task names; cycles yield an empty set (ERPNext blocks them
+    via check_recursion anyway).
     """
-    by_name = {t["name"]: t for t in tasks}
+    dated = [t for t in tasks if t.get("exp_start_date") and t.get("exp_end_date")]
+    by_name = {t["name"]: t for t in dated}
     if not by_name:
         return set()
+
+    origin = min(getdate(t["exp_start_date"]) for t in dated)
+    fixed_start = {
+        n: date_diff(getdate(by_name[n]["exp_start_date"]), origin) for n in by_name
+    }
 
     preds = {name: [p for p in edges.get(name, []) if p in by_name] for name in by_name}
     succs = {name: [] for name in by_name}
@@ -328,7 +366,11 @@ def compute_critical_path(tasks, edges):
     duration = {n: _duration_days(by_name[n]) for n in by_name}
     earliest_start, earliest_finish = {}, {}
     for node in order:
-        start = max([earliest_finish[p] for p in preds[node]], default=0)
+        # a task cannot start before its own scheduled start, nor before its
+        # predecessors finish
+        start = max(
+            [earliest_finish[p] for p in preds[node]] + [fixed_start[node]]
+        )
         earliest_start[node] = start
         earliest_finish[node] = start + duration[node]
 
@@ -369,6 +411,9 @@ def set_task_dependency(task, depends_on):
         frappe.throw(_("A task cannot depend on itself"))
     if not frappe.db.exists("Task", depends_on):
         frappe.throw(_("Task {0} not found").format(depends_on))
+    # don't let a user link to (and thereby read the details of) a task they
+    # have no read access to
+    frappe.has_permission("Task", doc=depends_on, throw=True)
 
     doc = frappe.get_doc("Task", task)
     if any(row.task == depends_on for row in doc.depends_on or []):
@@ -403,6 +448,12 @@ def get_task_dependencies(task):
     )
     out = []
     for row in rows:
+        if not row.task:
+            continue
+        if not frappe.has_permission("Task", doc=row.task):
+            # the link exists but its details are not this user's to see
+            out.append({"name": row.task, "subject": _("(no access)"), "status": None})
+            continue
         info = frappe.db.get_value(
             "Task", row.task, ["name", "subject", "status"], as_dict=True
         )
@@ -425,22 +476,31 @@ def reorder_column(project, status, task_names):
     high-frequency and must not bump `modified` or re-run validation.
     """
     _ensure_app_access()
-    frappe.has_permission("Project", doc=project, throw=True)
     task_names = frappe.parse_json(task_names) or []
     if status not in AGILE_STATUSES:
         frappe.throw(_("Invalid status: {0}").format(status))
+    if not task_names:
+        return {"ordered": 0}
 
-    owned = set(
-        frappe.get_all(
+    # This is a write, so require write access — not just read on the project.
+    frappe.has_permission("Project", ptype="read", doc=project, throw=True)
+
+    # get_list applies the user's own permissions, so tasks they cannot see
+    # never enter the set; then check write on each before touching it.
+    visible = set(
+        frappe.get_list(
             "Task",
             filters={"project": project, "name": ["in", task_names]},
             pluck="name",
+            limit_page_length=0,
         )
     )
+    ordered = 0
     for index, name in enumerate(task_names):
-        if name in owned:
+        if name in visible and frappe.has_permission("Task", ptype="write", doc=name):
             frappe.db.set_value("Task", name, "board_order", index, update_modified=False)
-    return {"ordered": len([n for n in task_names if n in owned])}
+            ordered += 1
+    return {"ordered": ordered}
 
 
 # ---------------------------------------------------------------------------
@@ -455,7 +515,9 @@ def get_my_work():
     user = frappe.session.user
     employee = frappe.db.get_value("Employee", {"user_id": user, "status": "Active"}, "name")
 
-    or_filters = [["Task", "_assign", "like", f"%{user}%"]]
+    # _assign is a JSON array string like ["a@b.com"]; quoting the needle stops
+    # "a@b.com" from matching "aa@b.com"
+    or_filters = [["Task", "_assign", "like", f'%"{user}"%']]
     if employee:
         or_filters.append(["Task", "sme_responsible", "=", employee])
 

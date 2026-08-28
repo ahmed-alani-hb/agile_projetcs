@@ -46,7 +46,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { Button, Dialog, Dropdown, createResource } from 'frappe-ui'
 import { toast, errorMessage } from '@/utils/toast'
 
@@ -63,11 +63,37 @@ const viewName = ref('')
 const isDefault = ref(false)
 const nameInput = ref(null)
 
+const appliedDefaultFor = ref(null)
+
 const views = createResource({
   url: 'agile_projects.views.get_views',
   makeParams: () => ({ project: props.project }),
   auto: true,
+  onSuccess: () => applyDefault(),
 })
+
+watch(
+  () => props.project,
+  () => {
+    appliedDefaultFor.value = null
+    views.reload()
+  }
+)
+
+// A view flagged as default is meant to load automatically — apply it once per
+// project + view type.
+watch(() => props.viewType, applyDefault)
+
+function applyDefault() {
+  const key = `${props.project}:${props.viewType}`
+  if (appliedDefaultFor.value === key) return
+  const match = (views.data || []).find(
+    (v) => v.is_default && v.view_type === props.viewType
+  )
+  if (!match) return
+  appliedDefaultFor.value = key
+  emit('apply', match)
+}
 
 const saveResource = createResource({ url: 'agile_projects.views.save_view' })
 const deleteResource = createResource({ url: 'agile_projects.views.delete_view' })

@@ -21,6 +21,7 @@
 import { ref, watch } from 'vue'
 import { createResource } from 'frappe-ui'
 import KanbanColumn from '@/components/KanbanColumn.vue'
+import { isOverdue } from '@/utils/format'
 import { toast, errorMessage } from '@/utils/toast'
 
 const props = defineProps({
@@ -61,7 +62,9 @@ function matchesFilters(task) {
   if (f.priority && task.priority !== f.priority) return false
   if (f.overdue) {
     if (task.status === 'Done' || !task.exp_end_date) return false
-    if (new Date(task.exp_end_date) >= new Date(new Date().toDateString())) return false
+    // isOverdue parses date-only values in local time; `new Date('YYYY-MM-DD')`
+    // is UTC midnight and marks today's tasks overdue west of UTC
+    if (!isOverdue(task.exp_end_date)) return false
   }
   if (f.search) {
     const needle = f.search.toLowerCase()

@@ -314,6 +314,12 @@ watch(
   ([open, name]) => {
     if (open && name) {
       activeTab.value = 'details'
+      // drop the previous task's data first, otherwise the drawer renders the
+      // old task while the new one loads and a save in that window would write
+      // the old values onto the new task
+      if (detail.data?.name !== name) {
+        detail.data = null
+      }
       detail.submit({ task: name })
     }
   },
