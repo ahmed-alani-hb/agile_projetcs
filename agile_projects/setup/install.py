@@ -45,6 +45,26 @@ CUSTOM_FIELDS = {
             "in_standard_filter": 1,
             "description": "Subject-matter expert accountable for this task (distinct from the document owner)",
         },
+        {
+            "fieldname": "blocked_reason",
+            "label": "Blocked Reason",
+            "fieldtype": "Small Text",
+            "insert_after": "sme_responsible",
+            "depends_on": 'eval: doc.status == "Blocked"',
+        },
+        {
+            # Real indexed ordering column. Frappe's stock Kanban keeps card
+            # order as a JSON blob on Kanban Board Column, which cannot be
+            # sorted or reported on; this can.
+            "fieldname": "board_order",
+            "label": "Board Order",
+            "fieldtype": "Int",
+            "insert_after": "blocked_reason",
+            "default": "0",
+            "hidden": 1,
+            "no_copy": 1,
+            "search_index": 1,
+        },
     ],
     "Project": [
         {

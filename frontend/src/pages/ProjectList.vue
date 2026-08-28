@@ -34,7 +34,7 @@
         <router-link
           v-for="project in projects.data"
           :key="project.name"
-          :to="{ name: 'ProjectBoard', params: { projectId: project.name } }"
+          :to="{ name: 'ProjectDetail', params: { projectId: project.name, view: 'board' } }"
           class="group rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition hover:border-indigo-300 hover:shadow-md"
         >
           <div class="flex items-start justify-between gap-3">

@@ -6,6 +6,17 @@
           <img src="/favicon.svg" alt="" class="h-7 w-7 rounded" />
           <span class="hidden text-sm font-semibold text-gray-900 sm:block">Agile Projects</span>
         </router-link>
+        <router-link
+          to="/my-work"
+          class="shrink-0 rounded-md px-2 py-1 text-sm font-medium"
+          :class="
+            $route.name === 'MyWork'
+              ? 'bg-indigo-50 text-indigo-700'
+              : 'text-gray-500 hover:text-gray-800'
+          "
+        >
+          My Work
+        </router-link>
         <div v-if="$slots.default" class="min-w-0 border-l border-gray-200 pl-3">
           <slot />
         </div>

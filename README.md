@@ -13,6 +13,24 @@ slide-out task drawer.
 
 ## Features
 
+### Five views over the same tasks (`/agile/projects/<project>/<view>`)
+
+Switch between **Board · List · Table · Timeline · Calendar**. Filters (search,
+status, SME, priority, overdue) apply across every view and can be stored as
+per-user **saved views**.
+
+- **List** — grouped by status, priority or SME with point subtotals.
+- **Table** — spreadsheet-style: pick your columns, edit cells inline, and
+  multi-select rows to **bulk change** status/priority/points. Each row is saved
+  individually, so one task rejected by the dependency gate never silently
+  discards the rest — you get a per-task report.
+- **Timeline** — a Gantt (`frappe-gantt`) with drag-to-reschedule, dependency
+  arrows and a **computed critical path**. Stock ERPNext's Gantt renders
+  dependencies read-only and has no critical-path concept.
+- **Calendar** — tasks on their due dates, colour-coded by status.
+- **My Work** (`/agile/my-work`) — everything assigned to you across *all*
+  projects, bucketed into Overdue / Blocked / Due today / This week / Later.
+
 ### Kanban board (`/agile/projects/<project>`)
 - Six agile statuses replace ERPNext's standard Task statuses:
   **Backlog → To Do → In Progress → QA/Code Review → Blocked → Done**
@@ -27,9 +45,11 @@ slide-out task drawer.
 - Filters: text search, SME, priority; per-column quick-add
 
 ### Task drawer
-- Inline autosave of subject, description, priority, complexity points,
-  SME Responsible (Link → Employee, distinct from owner), dates, progress
-- Dependency/blocker panel with live status of each dependency
+- Inline autosave of subject, priority, complexity points, SME Responsible
+  (Link → Employee, distinct from owner), dates, progress
+- Rich-text description (round-trips ERPNext's Text Editor HTML field)
+- Dependency panel with live status — **add and remove dependencies here**;
+  ERPNext offers no UI for this outside the Desk form's child table
 - **ERP Module Readiness Checklist** tab: check off module sign-offs
 - **Time** tab: log hours to standard ERPNext **Timesheets** (submitted, so
   hours roll into `Task.actual_time` and project costing)
@@ -116,6 +136,20 @@ standard role/document permissions, and writes are POST-only:
 | `get_checklist` / `add_checklist_row` / `update_checklist_row` / `delete_checklist_row` | ERP readiness checklist |
 | `log_time` / `get_task_timesheets` | ERPNext Timesheet logging per task |
 | `get_employees` / `get_activity_types` / `get_user_info` | Pickers & header |
+
+View endpoints live in `agile_projects/views.py`:
+
+| Endpoint | Purpose |
+|---|---|
+| `get_project_meta` | Shared header payload |
+| `get_tasks_list` | Paginated, filtered list — List, Table and Calendar |
+| `bulk_update_tasks` | Multi-task edit with per-task success/failure reporting |
+| `get_timeline` | Tasks + dependency edges + computed critical path |
+| `update_task_dates` | Drag-to-reschedule from the Gantt |
+| `set_task_dependency` / `remove_task_dependency` / `get_task_dependencies` | Editable dependency links |
+| `reorder_column` | Persist board card order in the indexed `board_order` field |
+| `get_my_work` | Cross-project assignments, bucketed |
+| `get_views` / `save_view` / `delete_view` | Per-user saved views |
 
 ## Known limitations
 

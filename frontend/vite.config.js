@@ -22,6 +22,12 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),
+      // frappe-gantt's package exports map blocks deep imports, so the
+      // stylesheet is aliased rather than vendored into src/
+      'frappe-gantt-css': path.resolve(
+        __dirname,
+        'node_modules/frappe-gantt/dist/frappe-gantt.css'
+      ),
     },
   },
 })

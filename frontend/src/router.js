@@ -1,6 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { sessionUser } from '@/data/session'
 
+const VIEW_TYPES = ['board', 'list', 'table', 'timeline', 'calendar']
+
 const routes = [
   {
     path: '/',
@@ -8,10 +10,18 @@ const routes = [
     component: () => import('@/pages/ProjectList.vue'),
   },
   {
-    path: '/projects/:projectId',
-    name: 'ProjectBoard',
-    component: () => import('@/pages/ProjectBoard.vue'),
-    props: true,
+    path: '/my-work',
+    name: 'MyWork',
+    component: () => import('@/pages/MyWork.vue'),
+  },
+  {
+    path: '/projects/:projectId/:view?',
+    name: 'ProjectDetail',
+    component: () => import('@/pages/ProjectDetail.vue'),
+    props: (route) => ({
+      projectId: route.params.projectId,
+      view: VIEW_TYPES.includes(route.params.view) ? route.params.view : 'board',
+    }),
   },
   {
     path: '/:pathMatch(.*)*',

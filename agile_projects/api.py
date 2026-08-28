@@ -38,6 +38,7 @@ TASK_EDITABLE_FIELDS = {
     "exp_end_date",
     "expected_time",
     "progress",
+    "blocked_reason",
 }
 
 CHECKLIST_EDITABLE_FIELDS = {
@@ -179,8 +180,11 @@ def get_board(project):
             "exp_end_date",
             "progress",
             "actual_time",
+            "board_order",
         ],
-        order_by="modified desc",
+        # board_order is our own indexed ordering column (stock Kanban keeps
+        # order in an unsortable JSON blob)
+        order_by="board_order asc, modified desc",
         limit_page_length=0,
     )
 

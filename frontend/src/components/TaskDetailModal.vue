@@ -86,13 +86,18 @@
 
               <div>
                 <label class="text-xs font-medium text-gray-500">Description</label>
-                <textarea
-                  v-model="form.description"
-                  rows="4"
-                  class="mt-1 w-full rounded-md border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500"
-                  placeholder="Add a description…"
-                  @change="saveField('description', textToHtml(form.description))"
-                ></textarea>
+                <div
+                  class="mt-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500"
+                >
+                  <TextEditor
+                    :content="form.description"
+                    :editable="true"
+                    placeholder="Add a description…"
+                    editor-class="prose-sm max-w-none min-h-[70px] focus:outline-none"
+                    @change="(html) => (form.description = html)"
+                    @blur="saveDescription"
+                  />
+                </div>
               </div>
 
               <div class="grid grid-cols-2 gap-4">
@@ -168,13 +173,13 @@
                 </div>
               </div>
 
-              <!-- dependencies / blockers -->
+              <!-- dependencies / blockers (editable — stock ERPNext's Gantt is read-only) -->
               <div>
                 <p class="text-xs font-medium text-gray-500">
                   Dependencies ({{ detail.data.depends_on.length }})
                 </p>
                 <p v-if="!detail.data.depends_on.length" class="mt-1 text-sm text-gray-400">
-                  No dependencies. Add them on the Task in ERPNext to enforce ordering.
+                  No dependencies yet. This task can start at any time.
                 </p>
                 <ul v-else class="mt-2 space-y-1.5">
                   <li
@@ -191,8 +196,31 @@
                     >
                       {{ dep.status }}
                     </span>
+                    <button
+                      class="text-xs text-gray-400 hover:text-red-600"
+                      title="Remove dependency"
+                      :disabled="dependencyResource.loading"
+                      @click="removeDependency(dep.name)"
+                    >
+                      ✕
+                    </button>
                   </li>
                 </ul>
+
+                <select
+                  class="mt-2 w-full rounded-md border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  :value="''"
+                  :disabled="dependencyResource.loading"
+                  @change="addDependency($event.target.value), ($event.target.value = '')"
+                >
+                  <option value="" disabled>+ Add a dependency…</option>
+                  <option v-for="option in dependencyOptions" :key="option.name" :value="option.name">
+                    {{ option.subject }} ({{ option.status }})
+                  </option>
+                </select>
+                <p class="mt-1 text-[11px] text-gray-400">
+                  This task cannot move to In Progress or Done until every dependency is Done.
+                </p>
               </div>
 
               <!-- meta -->
@@ -229,12 +257,12 @@
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
-import { createResource } from 'frappe-ui'
+import { TextEditor, createResource } from 'frappe-ui'
 import EmployeePicker from './EmployeePicker.vue'
 import ChecklistSection from './ChecklistSection.vue'
 import TimesheetSection from './TimesheetSection.vue'
 import { STATUSES, STATUS_META, POINT_OPTIONS, PRIORITIES } from '@/utils/statuses'
-import { formatHours, htmlToText, textToHtml } from '@/utils/format'
+import { formatHours } from '@/utils/format'
 import { toast, errorMessage } from '@/utils/toast'
 
 const props = defineProps({
@@ -267,7 +295,8 @@ const detail = createResource({
   url: 'agile_projects.api.get_task',
   onSuccess(data) {
     form.subject = data.subject || ''
-    form.description = htmlToText(data.description)
+    // Task.description is a Text Editor (HTML) field; the editor round-trips it
+    form.description = data.description || ''
     form.priority = data.priority || 'Medium'
     form.complexity_points = data.complexity_points || ''
     form.sme_responsible = data.sme_responsible || null
@@ -335,8 +364,68 @@ function changeStatus(status) {
     })
 }
 
+function saveDescription() {
+  if ((detail.data?.description || '') === (form.description || '')) return
+  saveField('description', form.description)
+}
+
 function onTimeLogged() {
   detail.submit({ task: props.taskName })
   emit('task-updated')
+}
+
+// ---- dependencies (add/remove; stock ERPNext offers no UI for this outside
+// the Desk form's child table) ----
+const dependencyResource = createResource({ url: 'agile_projects.views.set_task_dependency' })
+const removeResource = createResource({ url: 'agile_projects.views.remove_task_dependency' })
+
+const candidates = createResource({
+  url: 'agile_projects.views.get_tasks_list',
+  makeParams: () => ({
+    project: detail.data?.project,
+    order_by: 'subject asc',
+    page_length: 500,
+    fields: ['name', 'subject', 'status'],
+  }),
+})
+
+watch(
+  () => detail.data?.project,
+  (project) => {
+    if (project) candidates.reload()
+  }
+)
+
+const dependencyOptions = computed(() => {
+  const existing = new Set((detail.data?.depends_on || []).map((d) => d.name))
+  return (candidates.data?.tasks || []).filter(
+    (task) => task.name !== props.taskName && !existing.has(task.name)
+  )
+})
+
+function addDependency(dependsOn) {
+  if (!dependsOn) return
+  dependencyResource
+    .submit({ task: props.taskName, depends_on: dependsOn })
+    .then(() => {
+      toast({ title: 'Dependency added', type: 'success', timeout: 2000 })
+      detail.submit({ task: props.taskName })
+      emit('task-updated')
+    })
+    .catch((err) => {
+      toast({ title: 'Could not add dependency', text: errorMessage(err), type: 'error' })
+    })
+}
+
+function removeDependency(dependsOn) {
+  removeResource
+    .submit({ task: props.taskName, depends_on: dependsOn })
+    .then(() => {
+      detail.submit({ task: props.taskName })
+      emit('task-updated')
+    })
+    .catch((err) => {
+      toast({ title: 'Could not remove dependency', text: errorMessage(err), type: 'error' })
+    })
 }
 </script>
