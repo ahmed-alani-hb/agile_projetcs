@@ -8,7 +8,7 @@ recent Frappe rejects SQL functions passed as strings in a `fields` list.
 
 import frappe
 from frappe import _
-from frappe.utils import add_days, cint, date_diff, flt, getdate, nowdate
+from frappe.utils import add_days, cint, date_diff, flt, get_datetime, getdate, nowdate
 
 from agile_projects.api import (
     TASK_EDITABLE_FIELDS,
@@ -46,6 +46,20 @@ VIEW_TYPES = ("board", "list", "table", "timeline", "calendar")
 # ---------------------------------------------------------------------------
 # Shared filter handling
 # ---------------------------------------------------------------------------
+
+
+def _day_start(value):
+    """00:00:00 on the given day, for the v16 Datetime exp_start_date."""
+    return f"{getdate(value)} 00:00:00"
+
+
+def _day_end_str(value):
+    return f"{getdate(value)} 23:59:59.999999"
+
+
+def _day_end(value):
+    """23:59:59 on the given day, for the v16 Datetime exp_end_date."""
+    return f"{getdate(value)} 23:59:59"
 
 
 def _build_filters(project=None, filters=None):
@@ -91,7 +105,11 @@ def _build_filters(project=None, filters=None):
     elif from_date:
         out["exp_end_date"] = [">=", from_date]
     elif to_date:
-        out["exp_end_date"] = ["<", to_date] if filters.get("overdue") else ["<=", to_date]
+        # exp_end_date is Datetime on v16, and db_query formats a bare date as
+        # midnight — so "<=" would drop everything due later that same day.
+        out["exp_end_date"] = (
+            ["<", to_date] if filters.get("overdue") else ["<=", _day_end_str(to_date)]
+        )
 
     search = (filters.get("search") or "").strip()
     if search:
@@ -249,7 +267,9 @@ def _clean_error(exc):
     """
     message = getattr(exc, "message", None) or str(exc)
     if not str(message).strip():
-        log = frappe.get_message_log() if hasattr(frappe, "get_message_log") else []
+        # frappe.get_message_log() was removed in v16; the underlying local
+        # proxy still holds the same list of dicts.
+        log = list(getattr(frappe.local, "message_log", None) or [])
         if log:
             last = log[-1]
             message = last.get("message") if isinstance(last, dict) else str(last)
@@ -389,11 +409,20 @@ def update_task_dates(task, exp_start_date=None, exp_end_date=None):
     """Called when a Gantt bar is dragged or resized."""
     _ensure_app_access()
     doc = frappe.get_doc("Task", task)
+    # ERPNext v16 made exp_start_date/exp_end_date Datetime (they were Date in
+    # v15). The SPA sends date-only strings, so anchor the start at the top of
+    # the day and the end at the bottom: that keeps a same-day task from being
+    # a zero-length bar and preserves inclusive-day semantics. Mixing a date
+    # with the datetime already on the doc would also raise TypeError.
     if exp_start_date:
-        doc.exp_start_date = getdate(exp_start_date)
+        doc.exp_start_date = _day_start(exp_start_date)
     if exp_end_date:
-        doc.exp_end_date = getdate(exp_end_date)
-    if doc.exp_start_date and doc.exp_end_date and doc.exp_end_date < doc.exp_start_date:
+        doc.exp_end_date = _day_end(exp_end_date)
+    if (
+        doc.exp_start_date
+        and doc.exp_end_date
+        and get_datetime(doc.exp_end_date) < get_datetime(doc.exp_start_date)
+    ):
         frappe.throw(_("End date cannot be before start date"))
     doc.save()
     return {

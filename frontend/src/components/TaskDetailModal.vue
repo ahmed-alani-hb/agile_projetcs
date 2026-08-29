@@ -262,7 +262,7 @@ import EmployeePicker from './EmployeePicker.vue'
 import ChecklistSection from './ChecklistSection.vue'
 import TimesheetSection from './TimesheetSection.vue'
 import { STATUSES, STATUS_META, POINT_OPTIONS, PRIORITIES } from '@/utils/statuses'
-import { formatHours } from '@/utils/format'
+import { formatHours, toDateInput } from '@/utils/format'
 import { toast, errorMessage } from '@/utils/toast'
 
 const props = defineProps({
@@ -300,8 +300,9 @@ const detail = createResource({
     form.priority = data.priority || 'Medium'
     form.complexity_points = data.complexity_points || ''
     form.sme_responsible = data.sme_responsible || null
-    form.exp_start_date = data.exp_start_date || ''
-    form.exp_end_date = data.exp_end_date || ''
+    // date inputs need YYYY-MM-DD; v16 returns a datetime
+    form.exp_start_date = toDateInput(data.exp_start_date)
+    form.exp_end_date = toDateInput(data.exp_end_date)
     form.progress = data.progress || 0
   },
   onError(err) {

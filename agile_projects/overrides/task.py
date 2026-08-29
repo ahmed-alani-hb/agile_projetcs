@@ -43,9 +43,18 @@ class AgileTask(Task):
     def validate_status(self):
         # Replaces Task.validate_status (is_template forcing + the "Completed"
         # dependency gate, both keyed on statuses that no longer exist).
-        if self.status == self.get_db_value("status"):
+        previous = self.get_db_value("status")
+        if self.status == previous:
             return
-        if self.status in ("In Progress", DONE):
+        if self.status in ("In Progress", DONE) and self.get_unmet_dependencies():
+            if self.flags.from_timesheet:
+                # ERPNext v16's Timesheet.update_task_and_project forces
+                # status = "Working"/"Completed" on the task and saves it.
+                # Throwing here would abort the whole timesheet submission, so
+                # keep the task where it was instead — time still gets logged,
+                # and a blocked task still never illegally starts.
+                self.status = previous or "Backlog"
+                return
             self.validate_dependencies_done()
 
     def get_unmet_dependencies(self):
@@ -105,13 +114,13 @@ class AgileTask(Task):
         return
 
     def update_time_and_costing(self):
-        # Core auto-starts an "Open" task when a timesheet against it is
-        # submitted ("Open" → "Working"); mirror that for the agile statuses,
-        # but only when the dependency gate would allow starting — otherwise
-        # the whole Timesheet submission would fail on validate_status.
+        # ERPNext v16 calls this from Timesheet.update_task_and_project and
+        # then, on the same in-memory doc, forces status = "Working" (or
+        # "Completed") and saves. Flag the doc so validate_status can tell a
+        # timesheet-driven status write apart from a user action and soften
+        # the dependency gate instead of aborting the submission.
+        self.flags.from_timesheet = True
         super().update_time_and_costing()
-        if self.status in ("Backlog", "To Do") and not self.get_unmet_dependencies():
-            self.status = "In Progress"
 
     def reschedule_dependent_tasks(self):
         # Core body (v15) verbatim except for the status guard: only tasks
@@ -135,7 +144,9 @@ class AgileTask(Task):
             if (
                 task.exp_start_date
                 and task.exp_end_date
-                and task.exp_start_date < getdate(end_date)
+                # v16 made exp_* Datetime while act_* stayed Date, so both
+                # sides must be normalised or this raises TypeError.
+                and getdate(task.exp_start_date) < getdate(end_date)
                 and task.status in ("Backlog", "To Do")
             ):
                 task_duration = date_diff(task.exp_end_date, task.exp_start_date)

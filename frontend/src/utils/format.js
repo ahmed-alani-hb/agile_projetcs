@@ -71,3 +71,11 @@ export function formatHours(value) {
   if (!hours) return '0h'
   return Number.isInteger(hours) ? `${hours}h` : `${hours.toFixed(2)}h`
 }
+
+// ERPNext v16 made Task.exp_start_date / exp_end_date Datetime fields, so the
+// API returns "YYYY-MM-DD HH:MM:SS". <input type="date"> only accepts
+// "YYYY-MM-DD" and renders blank for anything else.
+export function toDateInput(value) {
+  if (!value) return ''
+  return String(value).slice(0, 10)
+}

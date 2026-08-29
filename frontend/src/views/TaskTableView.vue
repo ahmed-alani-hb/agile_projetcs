@@ -153,7 +153,7 @@
               <input
                 v-else-if="col.key === 'exp_start_date' || col.key === 'exp_end_date'"
                 type="date"
-                :value="task[col.key] || ''"
+                :value="toDateInput(task[col.key])"
                 class="w-full rounded border-0 bg-transparent px-1 py-0.5 text-xs focus:bg-white focus:ring-1 focus:ring-indigo-400"
                 :class="
                   col.key === 'exp_end_date' && isOverdue(task[col.key]) && task.status !== 'Done'
@@ -198,7 +198,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { Button, Dropdown, createResource } from 'frappe-ui'
 import { STATUSES, PRIORITIES, POINT_OPTIONS } from '@/utils/statuses'
-import { formatHours, isOverdue } from '@/utils/format'
+import { formatHours, isOverdue, toDateInput } from '@/utils/format'
 import { toast, errorMessage } from '@/utils/toast'
 
 const props = defineProps({

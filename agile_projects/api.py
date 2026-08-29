@@ -9,7 +9,7 @@ child rows and low-sensitivity lookup lists (employees, activity types) use
 import frappe
 from frappe import _
 from frappe.query_builder.functions import Count, Sum
-from frappe.utils import add_to_date, flt, get_datetime, now_datetime
+from frappe.utils import add_to_date, flt, get_datetime, getdate, now_datetime
 
 from agile_projects.overrides.task import AGILE_STATUSES, DONE
 
@@ -25,6 +25,20 @@ def _sum_logged_hours(task):
         .run(as_dict=True)
     )
     return flt(result[0].total_hours) if result and result[0].total_hours else 0
+
+def normalize_task_dates(values):
+    """ERPNext v16 made Task.exp_start_date / exp_end_date Datetime fields.
+
+    The SPA sends date-only strings, so anchor a start at the top of its day
+    and an end at the bottom — otherwise a same-day task spans zero time and
+    "due today" means due at 00:00.
+    """
+    if values.get("exp_start_date"):
+        values["exp_start_date"] = f"{getdate(values['exp_start_date'])} 00:00:00"
+    if values.get("exp_end_date"):
+        values["exp_end_date"] = f"{getdate(values['exp_end_date'])} 23:59:59"
+    return values
+
 
 ALLOWED_ROLES = {"System Manager", "Projects Manager", "Projects User"}
 
@@ -358,7 +372,7 @@ def create_task(
             "priority": priority,
             "complexity_points": complexity_points,
             "sme_responsible": sme_responsible,
-            "exp_end_date": exp_end_date,
+            **normalize_task_dates({"exp_end_date": exp_end_date}),
         }
     ).insert()
     return get_task(doc.name)
@@ -374,7 +388,7 @@ def update_task(task, fields):
             _("Field(s) {0} cannot be updated from the board").format(", ".join(sorted(invalid)))
         )
     doc = frappe.get_doc("Task", task)
-    doc.update(fields)
+    doc.update(normalize_task_dates(fields))
     doc.save()
     return get_task(doc.name)
 
