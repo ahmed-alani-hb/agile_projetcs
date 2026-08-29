@@ -656,4 +656,6 @@ def get_user_info():
         "user_image": info.get("user_image"),
         "employee": employee,
         "can_log_time": bool(employee),
+        "can_manage_sync": user == "Administrator"
+        or bool({"System Manager", "Projects Manager"} & set(frappe.get_roles())),
     }

@@ -101,7 +101,14 @@
           as an <b>Editor</b>, or the sync can't read it.
         </p>
 
-        <div class="mt-3 flex flex-wrap gap-2">
+        <p
+          v-if="!canManage"
+          class="mt-3 rounded bg-gray-50 px-3 py-2 text-xs text-gray-600"
+        >
+          Only a Projects Manager or System Manager can change these settings.
+        </p>
+
+        <div v-if="canManage" class="mt-3 flex flex-wrap gap-2">
           <Button variant="solid" :loading="save.loading" @click="saveConfig">Save</Button>
           <Button variant="subtle" :loading="test.loading" @click="testConnection">
             Test connection
@@ -129,38 +136,58 @@
         </h2>
 
         <p v-if="result.halted" class="mt-2 text-sm text-red-800">{{ result.halted }}</p>
+        <p v-else-if="result.push_skipped" class="mt-2 text-sm text-red-800">
+          {{ result.push_skipped }}
+        </p>
+        <p v-else-if="result.message" class="mt-2 text-sm text-gray-700">{{ result.message }}</p>
 
-        <div v-else class="mt-2 space-y-2 text-sm">
+        <div v-if="!result.halted && !result.push_skipped" class="mt-2 space-y-2 text-sm">
           <p class="text-gray-600">
-            {{ result.inbound.applied.length }} row{{ result.inbound.applied.length === 1 ? '' : 's' }}
+            {{ inbound.applied.length }} row{{ inbound.applied.length === 1 ? '' : 's' }}
             {{ result.dry_run ? 'would change' : 'changed' }} ·
-            {{ result.inbound.created.length }} new ·
-            {{ result.inbound.rejected.length }} rejected ·
-            {{ result.pushed }} pushed out
+            {{ inbound.created.length }} new ·
+            {{ inbound.conflicts.length }} conflict{{ inbound.conflicts.length === 1 ? '' : 's' }} ·
+            {{ inbound.rejected.length }} rejected
+            <span v-if="!result.dry_run"> · {{ result.pushed }} pushed out</span>
           </p>
 
-          <ul v-if="result.inbound.applied.length" class="space-y-1">
+          <ul v-if="inbound.applied.length" class="space-y-1">
             <li
-              v-for="item in result.inbound.applied"
-              :key="item.task + item.row"
+              v-for="item in inbound.applied"
+              :key="'a' + item.task + item.row"
               class="rounded border border-gray-200 px-2 py-1 text-xs"
             >
               <span class="font-mono text-gray-500">{{ item.task }}</span>
-              <span class="text-gray-700">
-                — {{ Object.keys(item.fields).join(', ') }}
-              </span>
+              <span class="text-gray-700"> — {{ Object.keys(item.fields).join(', ') }}</span>
             </li>
           </ul>
 
-          <ul v-if="result.inbound.rejected.length" class="space-y-1">
+          <ul v-if="inbound.conflicts.length" class="space-y-1">
             <li
-              v-for="item in result.inbound.rejected"
+              v-for="item in inbound.conflicts"
+              :key="'c' + item.row"
+              class="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900"
+            >
+              Row {{ item.row }}<span v-if="item.task"> ({{ item.task }})</span>:
+              changed in both places<span v-if="item.resolution">, kept the {{ item.resolution }} value</span>
+              <span v-if="item.error"> — {{ item.error }}</span>
+            </li>
+          </ul>
+
+          <ul v-if="inbound.rejected.length" class="space-y-1">
+            <li
+              v-for="item in inbound.rejected"
               :key="'r' + item.row"
               class="rounded border border-orange-200 bg-orange-50 px-2 py-1 text-xs text-orange-900"
             >
               Row {{ item.row }}<span v-if="item.task"> ({{ item.task }})</span>: {{ item.error }}
             </li>
           </ul>
+
+          <p v-if="inbound.skipped.length" class="text-xs text-gray-500">
+            {{ inbound.skipped.length }} row(s) had no baseline yet and were left alone; they
+            become the baseline after this push.
+          </p>
         </div>
       </section>
 
@@ -201,8 +228,9 @@
 </template>
 
 <script setup>
-import { reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { Button, createResource } from 'frappe-ui'
+import { userInfo } from '@/data/session'
 import { formatDateTime } from '@/utils/format'
 import { toast, errorMessage } from '@/utils/toast'
 
@@ -216,6 +244,12 @@ const emit = defineEmits(['open-task', 'changed'])
 const cfg = ref(null)
 const result = ref(null)
 const syncing = ref(false)
+
+const EMPTY_INBOUND = { applied: [], created: [], rejected: [], conflicts: [], skipped: [] }
+// every backend path returns this shape, but guard anyway so an unexpected
+// response can never blank the panel
+const inbound = computed(() => ({ ...EMPTY_INBOUND, ...(result.value?.inbound || {}) }))
+const canManage = computed(() => !!userInfo.data?.can_manage_sync)
 
 const form = reactive({
   spreadsheet_id: '',
@@ -263,13 +297,25 @@ watch(
   }
 )
 
+onMounted(() => {
+  if (!userInfo.data && !userInfo.loading) userInfo.fetch()
+})
+
 const save = createResource({ url: 'agile_projects.google.api.save_sync_config' })
 const test = createResource({ url: 'agile_projects.google.api.test_connection' })
 const sync = createResource({ url: 'agile_projects.google.api.sync_now' })
 
 function saveConfig() {
   save
-    .submit({ project: props.project, ...form, enabled: form.enabled ? 1 : 0 })
+    .submit({
+      project: props.project,
+      spreadsheet_id: form.spreadsheet_id,
+      sheet_tab: form.sheet_tab,
+      direction: form.direction,
+      conflict_policy: form.conflict_policy,
+      max_changes_per_sync: form.max_changes_per_sync,
+      enabled: form.enabled ? 1 : 0,
+    })
     .then(() => {
       toast({ title: 'Saved', type: 'success', timeout: 2000 })
       config.reload()

@@ -41,7 +41,7 @@ LIST_FIELDS = [
 # dependency gate holds.
 BULK_EDITABLE_FIELDS = TASK_EDITABLE_FIELDS | {"status", "blocked_reason"}
 
-VIEW_TYPES = ("board", "list", "table", "timeline", "calendar")
+VIEW_TYPES = ("board", "list", "table", "timeline", "calendar", "sheet")
 
 
 # ---------------------------------------------------------------------------

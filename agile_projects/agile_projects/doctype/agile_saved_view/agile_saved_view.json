@@ -49,7 +49,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "View Type",
-   "options": "board\nlist\ntable\ntimeline\ncalendar",
+   "options": "board\nlist\ntable\ntimeline\ncalendar\nsheet",
    "reqd": 1
   },
   {

@@ -42,15 +42,37 @@ def is_configured():
     return bool(settings.get_password("service_account_json", raise_exception=False))
 
 
-def get_credentials():
+def _load_key():
+    """Return the parsed key, or throw. Isolated so no frame that can raise
+    later still holds the plaintext.
+
+    This matters: frappe.log_error() renders the traceback WITH frame
+    variables, and its sanitiser only redacts names matching password/secret/
+    token/key — not `raw`, not `info`, and not the dict key `private_key`. A
+    credential failure raised from a frame holding the key would therefore
+    write it to the Error Log in cleartext.
+    """
     settings = frappe.get_cached_doc("Agile Google Settings")
     if not settings.enabled:
         frappe.throw(_("Google Sheets sync is not enabled in Agile Google Settings."), SheetSyncError)
 
-    raw = settings.get_password("service_account_json", raise_exception=False)
-    if not raw:
+    key_json = settings.get_password("service_account_json", raise_exception=False)
+    if not key_json:
         frappe.throw(_("No service account key has been configured."), SheetSyncError)
 
+    parsed = None
+    try:
+        parsed = frappe.parse_json(key_json)
+    except Exception:
+        parsed = None
+    finally:
+        del key_json
+    if not isinstance(parsed, dict):
+        frappe.throw(_("The stored service account key is not valid JSON."), SheetSyncError)
+    return parsed
+
+
+def get_credentials():
     try:
         from google.oauth2 import service_account
     except ImportError:
@@ -59,14 +81,26 @@ def get_credentials():
             SheetSyncError,
         )
 
-    info = frappe.parse_json(raw)
+    info = _load_key()
+    failed = False
     try:
         # no `subject=` — that is domain-wide delegation, which is not needed
         # when the sheet is shared with the service account directly
         return service_account.Credentials.from_service_account_info(info, scopes=SCOPES)
-    except Exception as exc:
+    except Exception:
+        failed = True
+    finally:
+        info = None
+        del info
+    if failed:
+        # raised outside the frame that held the key, and deliberately without
+        # echoing the underlying exception text
         frappe.throw(
-            _("The service account key was rejected by Google: {0}").format(exc), SheetSyncError
+            _(
+                "Google rejected the service account key. Check that the JSON key is complete "
+                "and has not been revoked."
+            ),
+            SheetSyncError,
         )
 
 
@@ -167,6 +201,8 @@ def translate_error(exc):
             "The tab named in this sync no longer exists in the spreadsheet. "
             "Rename it back, or update the Sheet Tab field."
         )
+    elif status == 400 and "tried writing to row" in reason:
+        message = _("The spreadsheet tab does not have enough rows for this project. Add rows and sync again.")
     elif status == 400 and "no grid with id" in reason:
         message = _("The spreadsheet tab was recreated. Run the sync again to re-detect it.")
     elif status == 429:
@@ -235,16 +271,53 @@ def clear_values(sheets, spreadsheet_id, a1_range):
     )
 
 
-def get_sheet_properties(sheets, spreadsheet_id):
-    """Resolve tab title -> numeric sheetId, which batchUpdate needs."""
+def get_sheet_grid(sheets, spreadsheet_id):
+    """tab title -> full properties, including gridProperties.
+
+    values.update writes only INSIDE the existing grid — unlike append it
+    cannot add rows — so a project with more tasks than the tab has rows fails
+    with a 400 unless the grid is grown first.
+    """
     result = execute(
-        sheets.spreadsheets().get(spreadsheetId=spreadsheet_id, fields="sheets.properties")
+        sheets.spreadsheets().get(
+            spreadsheetId=spreadsheet_id,
+            fields="sheets.properties(sheetId,title,gridProperties(rowCount,columnCount))",
+        )
     )
     return {
-        s["properties"]["title"]: s["properties"]["sheetId"]
-        for s in result.get("sheets", [])
-        if s.get("properties")
+        sheet["properties"]["title"]: sheet["properties"]
+        for sheet in result.get("sheets", [])
+        if sheet.get("properties")
     }
+
+
+def get_sheet_properties(sheets, spreadsheet_id):
+    """Resolve tab title -> numeric sheetId, which batchUpdate needs."""
+    return {title: props["sheetId"] for title, props in get_sheet_grid(sheets, spreadsheet_id).items()}
+
+
+def ensure_grid_size(sheets, spreadsheet_id, tab, needed_rows):
+    """Grow the tab if the write would run past the last row of the grid."""
+    grid = get_sheet_grid(sheets, spreadsheet_id)
+    props = grid.get(tab)
+    if not props:
+        return None
+    current = (props.get("gridProperties") or {}).get("rowCount") or 0
+    if needed_rows > current:
+        batch_update(
+            sheets,
+            spreadsheet_id,
+            [
+                {
+                    "appendDimension": {
+                        "sheetId": props["sheetId"],
+                        "dimension": "ROWS",
+                        "length": needed_rows - current + 100,
+                    }
+                }
+            ],
+        )
+    return props["sheetId"]
 
 
 def batch_update(sheets, spreadsheet_id, requests):

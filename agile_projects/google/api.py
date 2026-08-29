@@ -83,7 +83,9 @@ def save_sync_config(
             "enabled": frappe.utils.cint(enabled),
             "conflict_policy": conflict_policy,
             "max_changes_per_sync": frappe.utils.cint(max_changes_per_sync) or 25,
-            "sync_as_user": sync_as_user or frappe.session.user,
+            # only set on first creation, or when explicitly supplied: otherwise
+            # whoever last clicked Save silently becomes the sync identity
+            "sync_as_user": sync_as_user or doc.sync_as_user or frappe.session.user,
         }
     )
     doc.save()
@@ -93,16 +95,17 @@ def save_sync_config(
 @frappe.whitelist(methods=["POST"])
 def sync_now(project, dry_run=0):
     """Manual sync. A dry run reports the full diff and writes nothing."""
-    _ensure_app_access()
+    _manager_only()
     frappe.has_permission("Project", ptype="write", doc=project, throw=True)
 
     name = frappe.db.exists("Agile Sheet Sync", {"project": project})
     if not name:
         frappe.throw(_("This project has no Google Sheet configured yet."))
 
-    return sheet_sync.run_as_configured_user(
-        name, dry_run=frappe.utils.cint(dry_run), force=True
-    )
+    # run_interactive, not the scheduled path: frappe.set_user inside a web
+    # request corrupts the caller's session. The caller is already
+    # authenticated and permission-checked above.
+    return sheet_sync.run_interactive(name, dry_run=frappe.utils.cint(dry_run), force=True)
 
 
 @frappe.whitelist()
@@ -123,6 +126,7 @@ def get_sync_log(project, limit=50):
 def test_connection(project):
     """Confirm the sheet is reachable and writable before enabling a sync."""
     _manager_only()
+    frappe.has_permission("Project", ptype="write", doc=project, throw=True)
     name = frappe.db.exists("Agile Sheet Sync", {"project": project})
     if not name:
         frappe.throw(_("Save the spreadsheet ID first."))
@@ -131,6 +135,10 @@ def test_connection(project):
     sheets, drive = client.get_services()
     meta = client.get_file_metadata(drive, doc.spreadsheet_id)
     tabs = client.get_sheet_properties(sheets, doc.spreadsheet_id)
+    if meta.get("trashed"):
+        frappe.throw(
+            _("'{0}' is in Google Drive's bin. Restore it before syncing.").format(meta.get("name"))
+        )
     return {
         "name": meta.get("name"),
         "trashed": bool(meta.get("trashed")),
