@@ -48,5 +48,18 @@ doc_events = {
     },
 }
 
+# ---------------------------------------------------------------------------
+# Google Sheets sync
+# ---------------------------------------------------------------------------
+
+# NOTE: v16 raised the default scheduler tick to 240s, so a */1 cron would not
+# actually fire every minute. This is the realistic floor without setting
+# scheduler_tick_interval in common_site_config.json.
+scheduler_events = {
+    "cron": {
+        "*/5 * * * *": ["agile_projects.google.sheet_sync.sync_all_sheets"],
+    },
+}
+
 after_install = "agile_projects.setup.install.after_install"
 after_migrate = "agile_projects.setup.install.after_migrate"

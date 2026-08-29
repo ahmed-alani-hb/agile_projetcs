@@ -31,5 +31,6 @@ const views = [
   { value: 'table', label: 'Table', icon: '⊞' },
   { value: 'timeline', label: 'Timeline', icon: '⇥' },
   { value: 'calendar', label: 'Calendar', icon: '▤' },
+  { value: 'sheet', label: 'Sheet', icon: '🔗' },
 ]
 </script>

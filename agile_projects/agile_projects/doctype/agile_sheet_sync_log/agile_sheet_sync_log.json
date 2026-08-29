@@ -1,0 +1,109 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-08-29 12:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "sheet_sync",
+  "project",
+  "task",
+  "row_number",
+  "outcome",
+  "column_break_1",
+  "field",
+  "old_value",
+  "new_value",
+  "reason"
+ ],
+ "fields": [
+  {
+   "fieldname": "sheet_sync",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Sheet Sync",
+   "options": "Agile Sheet Sync"
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "label": "Project",
+   "options": "Project"
+  },
+  {
+   "fieldname": "task",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Task",
+   "options": "Task"
+  },
+  {
+   "fieldname": "row_number",
+   "fieldtype": "Int",
+   "label": "Sheet Row"
+  },
+  {
+   "fieldname": "outcome",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Outcome",
+   "options": "created\nupdated\nskipped\nconflict\nrejected\nerror\nhalted"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "field",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Field"
+  },
+  {
+   "description": "Value before the sync applied the change. This is what makes a bad spreadsheet edit recoverable.",
+   "fieldname": "old_value",
+   "fieldtype": "Small Text",
+   "label": "Old Value"
+  },
+  {
+   "fieldname": "new_value",
+   "fieldtype": "Small Text",
+   "label": "New Value"
+  },
+  {
+   "fieldname": "reason",
+   "fieldtype": "Small Text",
+   "label": "Reason"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-08-29 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Agile Projects",
+ "name": "Agile Sheet Sync Log",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "read": 1,
+   "role": "Projects User"
+  },
+  {
+   "delete": 1,
+   "read": 1,
+   "role": "Projects Manager"
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}

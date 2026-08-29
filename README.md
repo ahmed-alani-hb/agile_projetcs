@@ -31,6 +31,47 @@ per-user **saved views**.
 - **My Work** (`/agile/my-work`) — everything assigned to you across *all*
   projects, bucketed into Overdue / Blocked / Due today / This week / Later.
 
+### Google Sheets sync (`/agile/projects/<project>/sheet`)
+
+Mirror a project's tasks into a Google Sheet, and optionally let people who
+never log into ERPNext edit them there.
+
+- **Push** — the Sheet is a read-only mirror, refreshed on a schedule.
+- **Two-way** — edits in the Sheet are written back through the normal
+  document save path, so **permissions and the dependency gate still apply**.
+  A blocked task rejected by the gate is reported per row; the rest of the
+  batch still applies.
+
+Safety, because a spreadsheet is a hostile input surface:
+
+| Rail | Why |
+|---|---|
+| Every change logged with its **old value** | A bad paste is recoverable by inspection, not a DB restore |
+| **Circuit breaker** (default 25 rows) | A runaway fill-drag halts the sync with nothing written |
+| **Preview changes** | Full diff before anything is applied |
+| **Never deletes** | A row removed from the Sheet re-appears on the next push; the Task survives |
+| **Validate, never coerce** | A bad status/points/date is rejected with a reason, not silently mangled |
+| Runs as a **named user**, never Administrator | Otherwise a scheduled job would bypass document permissions |
+
+Identity is the **Task ID in column A** (protected), never the row number, so
+people can insert, delete and sort rows freely. `description` is pushed
+read-only — it is a rich-text field and a spreadsheet round-trip would flatten
+it on every sync.
+
+**Setup** — one Google Cloud project, one service account, no per-user login:
+
+1. Enable the **Sheets API** and **Drive API** on a Google Cloud project.
+2. Create a service account and download its JSON key.
+3. Paste the key into **Agile Google Settings** (stored encrypted) and enable.
+4. **Create each spreadsheet yourself**, then share it with the service account
+   address as **Editor**. The app never creates spreadsheets — files owned by a
+   service account belong to an identity nobody can sign into.
+
+Until a key is configured the whole feature is inert. Note that the Sheet opens
+in Google rather than embedding: Google does not permit framing the editable
+Sheets UI on another domain, and the only embeddable form is public and
+read-only.
+
 ### Kanban board (`/agile/projects/<project>`)
 - Six agile statuses replace ERPNext's standard Task statuses:
   **Backlog → To Do → In Progress → QA/Code Review → Blocked → Done**

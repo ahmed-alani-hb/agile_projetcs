@@ -1,0 +1,62 @@
+{
+ "actions": [],
+ "creation": "2026-08-29 12:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "enabled",
+  "service_account_json",
+  "service_account_email",
+  "setup_help"
+ ],
+ "fields": [
+  {
+   "default": "0",
+   "description": "Until this is ticked, no Google API call is ever made.",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enable Google Sheets Sync"
+  },
+  {
+   "description": "Paste the full JSON key file for the service account. Stored encrypted.",
+   "fieldname": "service_account_json",
+   "fieldtype": "Password",
+   "label": "Service Account JSON Key"
+  },
+  {
+   "description": "Share every spreadsheet with this address as an Editor.",
+   "fieldname": "service_account_email",
+   "fieldtype": "Data",
+   "label": "Service Account Email",
+   "read_only": 1
+  },
+  {
+   "fieldname": "setup_help",
+   "fieldtype": "HTML",
+   "label": "Setup",
+   "options": "<div class='text-muted small'><ol><li>Create a Google Cloud project and enable the <b>Google Sheets API</b> and <b>Google Drive API</b>.</li><li>Create a service account and download its JSON key.</li><li>Paste the key above and save.</li><li>Create each spreadsheet yourself, then share it with the service account email as <b>Editor</b>.</li></ol><p>The app never creates spreadsheets: files created by a service account are owned by an identity nobody can sign in as.</p></div>"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-08-29 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Agile Projects",
+ "name": "Agile Google Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}

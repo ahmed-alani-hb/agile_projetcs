@@ -73,6 +73,14 @@
         @open-task="openTask"
         @changed="onViewChanged"
       />
+      <SheetView
+        v-else-if="view === 'sheet'"
+        ref="activeView"
+        :project="projectId"
+        :filters="filters"
+        @open-task="openTask"
+        @changed="onExternalChange"
+      />
       <CalendarView
         v-else-if="view === 'calendar'"
         ref="activeView"
@@ -114,6 +122,7 @@ import TaskListView from '@/views/TaskListView.vue'
 import TaskTableView from '@/views/TaskTableView.vue'
 import TimelineView from '@/views/TimelineView.vue'
 import CalendarView from '@/views/CalendarView.vue'
+import SheetView from '@/views/SheetView.vue'
 import { toast, errorMessage } from '@/utils/toast'
 
 const props = defineProps({

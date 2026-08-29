@@ -15,6 +15,7 @@ from agile_projects.api import (
     _attach_employee_info,
     _ensure_app_access,
     _get_blockers,
+    normalize_task_dates,
 )
 from agile_projects.overrides.task import AGILE_STATUSES, DONE
 
@@ -101,7 +102,9 @@ def _build_filters(project=None, filters=None):
             out["status"] = ["!=", DONE]
 
     if from_date and to_date:
-        out["exp_end_date"] = ["between", [from_date, to_date]]
+        # same midnight-truncation as the single-bound branch below: a bare
+        # to_date against a Datetime column excludes that whole day's tasks
+        out["exp_end_date"] = ["between", [from_date, _day_end_str(to_date)]]
     elif from_date:
         out["exp_end_date"] = [">=", from_date]
     elif to_date:
@@ -250,7 +253,9 @@ def bulk_update_tasks(tasks, fields):
         try:
             frappe.db.savepoint(savepoint)
             doc = frappe.get_doc("Task", name)
-            doc.update(fields)
+            # exp_* are Datetime on v16; a bare date string would be stored as
+            # midnight (and an end date would land before its own day's work)
+            doc.update(normalize_task_dates(dict(fields)))
             doc.save()
             updated.append(name)
         except Exception as exc:

@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { sessionUser } from '@/data/session'
 
-const VIEW_TYPES = ['board', 'list', 'table', 'timeline', 'calendar']
+const VIEW_TYPES = ['board', 'list', 'table', 'timeline', 'calendar', 'sheet']
 
 const routes = [
   {

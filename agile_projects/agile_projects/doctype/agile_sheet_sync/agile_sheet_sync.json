@@ -1,0 +1,171 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:project",
+ "creation": "2026-08-29 12:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "project",
+  "enabled",
+  "direction",
+  "spreadsheet_id",
+  "sheet_tab",
+  "column_break_1",
+  "sync_as_user",
+  "conflict_policy",
+  "max_changes_per_sync",
+  "state_section",
+  "last_synced_at",
+  "last_seen_version",
+  "last_seen_modified",
+  "last_error",
+  "last_pushed_snapshot",
+  "protected_range_ids"
+ ],
+ "fields": [
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Project",
+   "options": "Project",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Enabled"
+  },
+  {
+   "default": "push",
+   "description": "push = the Sheet is a read-only mirror. two_way = edits in the Sheet are written back to ERPNext.",
+   "fieldname": "direction",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Direction",
+   "options": "push\ntwo_way",
+   "reqd": 1
+  },
+  {
+   "description": "The long id from the sheet URL: docs.google.com/spreadsheets/d/<THIS>/edit",
+   "fieldname": "spreadsheet_id",
+   "fieldtype": "Data",
+   "label": "Spreadsheet ID",
+   "reqd": 1
+  },
+  {
+   "default": "Tasks",
+   "description": "Tab name inside the spreadsheet. Renaming the tab in Google breaks the sync until this is updated.",
+   "fieldname": "sheet_tab",
+   "fieldtype": "Data",
+   "label": "Sheet Tab",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Scheduled syncs act as this user, so permissions and completion stamps are attributed correctly. Jobs would otherwise run as Administrator and bypass permissions.",
+   "fieldname": "sync_as_user",
+   "fieldtype": "Link",
+   "label": "Sync As User",
+   "options": "User",
+   "reqd": 1
+  },
+  {
+   "default": "erpnext_wins",
+   "description": "Applied when the same task changed in both places since the last sync.",
+   "fieldname": "conflict_policy",
+   "fieldtype": "Select",
+   "label": "Conflict Policy",
+   "options": "erpnext_wins\nsheet_wins\nnewest_wins",
+   "reqd": 1
+  },
+  {
+   "default": "25",
+   "description": "Safety limit. If one pull would change more rows than this, nothing is written and a notification is raised instead.",
+   "fieldname": "max_changes_per_sync",
+   "fieldtype": "Int",
+   "label": "Max Changes Per Sync"
+  },
+  {
+   "fieldname": "state_section",
+   "fieldtype": "Section Break",
+   "label": "Sync State"
+  },
+  {
+   "fieldname": "last_synced_at",
+   "fieldtype": "Datetime",
+   "label": "Last Synced At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_seen_version",
+   "fieldtype": "Data",
+   "label": "Last Seen Drive Version",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_seen_modified",
+   "fieldtype": "Data",
+   "label": "Last Seen Modified Time",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_error",
+   "fieldtype": "Small Text",
+   "label": "Last Error",
+   "read_only": 1
+  },
+  {
+   "description": "What the sync last wrote, used to tell a human edit apart from our own write.",
+   "fieldname": "last_pushed_snapshot",
+   "fieldtype": "Long Text",
+   "label": "Last Pushed Snapshot",
+   "read_only": 1
+  },
+  {
+   "fieldname": "protected_range_ids",
+   "fieldtype": "Long Text",
+   "label": "Protected Range IDs",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-08-29 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Agile Projects",
+ "name": "Agile Sheet Sync",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "role": "Projects Manager",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Projects User"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
