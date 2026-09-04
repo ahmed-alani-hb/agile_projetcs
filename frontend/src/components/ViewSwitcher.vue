@@ -34,5 +34,6 @@ const views = [
   { value: 'sheet', label: 'Sheet', icon: '🔗' },
   { value: 'modules', label: 'Modules', icon: '⛩' },
   { value: 'cutover', label: 'Cutover', icon: '🏁' },
+  { value: 'dashboard', label: 'Metrics', icon: '📈' },
 ]
 </script>

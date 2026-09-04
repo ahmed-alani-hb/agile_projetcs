@@ -10,6 +10,7 @@ const VIEW_TYPES = [
   'sheet',
   'modules',
   'cutover',
+  'dashboard',
 ]
 
 const routes = [
@@ -17,6 +18,11 @@ const routes = [
     path: '/',
     name: 'ProjectList',
     component: () => import('@/pages/ProjectList.vue'),
+  },
+  {
+    path: '/portfolio',
+    name: 'Portfolio',
+    component: () => import('@/pages/Portfolio.vue'),
   },
   {
     path: '/my-work',

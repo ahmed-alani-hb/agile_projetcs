@@ -65,6 +65,9 @@ doc_events = {
 scheduler_events = {
     "cron": {
         "*/5 * * * *": ["agile_projects.google.sheet_sync.sync_all_sheets"],
+        # Daily, just after midnight. Per-status flow cannot be reconstructed
+        # retroactively, so this is the only way that history ever exists.
+        "15 0 * * *": ["agile_projects.metrics.snapshot_all_projects"],
     },
 }
 

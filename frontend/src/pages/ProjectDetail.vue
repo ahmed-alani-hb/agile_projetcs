@@ -104,6 +104,11 @@
         :project="projectId"
         @changed="onViewChanged"
       />
+      <DashboardView
+        v-else-if="view === 'dashboard'"
+        ref="activeView"
+        :project="projectId"
+      />
     </main>
 
     <TaskDetailModal
@@ -140,6 +145,7 @@ import CalendarView from '@/views/CalendarView.vue'
 import SheetView from '@/views/SheetView.vue'
 import ModulesView from '@/views/ModulesView.vue'
 import CutoverView from '@/views/CutoverView.vue'
+import DashboardView from '@/views/DashboardView.vue'
 import { toast, errorMessage } from '@/utils/toast'
 
 const props = defineProps({

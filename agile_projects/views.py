@@ -53,6 +53,7 @@ VIEW_TYPES = (
     "sheet",
     "modules",
     "cutover",
+    "dashboard",
 )
 
 

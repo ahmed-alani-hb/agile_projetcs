@@ -1,0 +1,154 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-09-04 14:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 0,
+ "engine": "InnoDB",
+ "field_order": [
+  "project",
+  "snapshot_date",
+  "column_break_1",
+  "percent_complete",
+  "tasks_section",
+  "total_tasks",
+  "done_tasks",
+  "blocked_tasks",
+  "column_break_2",
+  "total_points",
+  "done_points",
+  "modules_section",
+  "modules_total",
+  "modules_live",
+  "detail_section",
+  "status_counts",
+  "gate_counts"
+ ],
+ "fields": [
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Project",
+   "options": "Project",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "description": "One row per project per day; re-running the job updates the row rather than adding another.",
+   "fieldname": "snapshot_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Snapshot Date",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "percent_complete",
+   "fieldtype": "Percent",
+   "in_list_view": 1,
+   "label": "Percent Complete"
+  },
+  {
+   "fieldname": "tasks_section",
+   "fieldtype": "Section Break",
+   "label": "Tasks"
+  },
+  {
+   "fieldname": "total_tasks",
+   "fieldtype": "Int",
+   "label": "Total Tasks"
+  },
+  {
+   "fieldname": "done_tasks",
+   "fieldtype": "Int",
+   "label": "Done Tasks"
+  },
+  {
+   "fieldname": "blocked_tasks",
+   "fieldtype": "Int",
+   "label": "Blocked Tasks"
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "total_points",
+   "fieldtype": "Int",
+   "label": "Total Points"
+  },
+  {
+   "fieldname": "done_points",
+   "fieldtype": "Int",
+   "label": "Done Points"
+  },
+  {
+   "fieldname": "modules_section",
+   "fieldtype": "Section Break",
+   "label": "Modules"
+  },
+  {
+   "fieldname": "modules_total",
+   "fieldtype": "Int",
+   "label": "Modules"
+  },
+  {
+   "fieldname": "modules_live",
+   "fieldtype": "Int",
+   "label": "Modules Live"
+  },
+  {
+   "fieldname": "detail_section",
+   "fieldtype": "Section Break",
+   "label": "Detail"
+  },
+  {
+   "description": "JSON object of task counts keyed by agile status — the cumulative flow series",
+   "fieldname": "status_counts",
+   "fieldtype": "Long Text",
+   "label": "Status Counts"
+  },
+  {
+   "description": "JSON object of module counts keyed by gate",
+   "fieldname": "gate_counts",
+   "fieldtype": "Long Text",
+   "label": "Gate Counts"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-09-04 14:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Agile Projects",
+ "name": "Agile Metric Snapshot",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "read": 1,
+   "role": "Projects User"
+  },
+  {
+   "delete": 1,
+   "read": 1,
+   "role": "Projects Manager"
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  }
+ ],
+ "sort_field": "snapshot_date",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}
