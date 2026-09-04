@@ -1,0 +1,73 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-08-28 12:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "module_name",
+  "system_platform",
+  "configuration_status",
+  "data_migration_status",
+  "functional_signoff"
+ ],
+ "fields": [
+  {
+   "fieldname": "module_name",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Module Name",
+   "options": "Accounting\nInventory\nCRM\nSelling\nBuying\nManufacturing\nHR & Payroll\nProjects\nAssets\nSupport\nWebsite\nOther",
+   "reqd": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "system_platform",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "System Platform",
+   "options": "Odoo\nERPNext",
+   "reqd": 1,
+   "columns": 2
+  },
+  {
+   "default": "Not Started",
+   "fieldname": "configuration_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Configuration Status",
+   "options": "Not Started\nIn Progress\nConfigured\nVerified",
+   "columns": 2
+  },
+  {
+   "default": "Not Started",
+   "fieldname": "data_migration_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Data Migration Status",
+   "options": "Not Started\nIn Progress\nMigrated\nValidated",
+   "columns": 2
+  },
+  {
+   "default": "0",
+   "fieldname": "functional_signoff",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Functional Sign-off",
+   "columns": 2
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-28 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Agile Projects",
+ "name": "ERP Module Readiness Checklist",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
