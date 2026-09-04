@@ -11,6 +11,7 @@ const VIEW_TYPES = [
   'modules',
   'cutover',
   'dashboard',
+  'roadmap',
 ]
 
 const routes = [

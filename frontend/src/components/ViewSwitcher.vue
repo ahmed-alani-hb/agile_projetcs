@@ -35,5 +35,6 @@ const views = [
   { value: 'modules', label: 'Modules', icon: '⛩' },
   { value: 'cutover', label: 'Cutover', icon: '🏁' },
   { value: 'dashboard', label: 'Metrics', icon: '📈' },
+  { value: 'roadmap', label: 'Roadmap', icon: '🗓' },
 ]
 </script>

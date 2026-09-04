@@ -11,7 +11,7 @@ a per-document permission check, and writes are POST-only.
 
 import frappe
 from frappe import _
-from frappe.utils import cint, flt, now_datetime
+from frappe.utils import cint, flt, getdate, now_datetime
 
 from agile_projects.agile_projects.doctype.agile_module.agile_module import (
     GATE_POSITION,
@@ -322,6 +322,107 @@ def _module_payload(module, project):
 # ---------------------------------------------------------------------------
 # Cutover runbook
 # ---------------------------------------------------------------------------
+
+
+@frappe.whitelist()
+def get_roadmap(project):
+    """Modules and cutover steps as bars, for the rollout-level Gantt.
+
+    A module has a `target_go_live` but no start date, so its bar starts at the
+    earliest start among its own tasks, falling back to the project's expected
+    start. That is a synthesis rather than data, so each bar says which it got
+    via `start_is_inferred` — a chart that quietly invents dates is worse than
+    one that admits to it.
+    """
+    _ensure_app_access()
+    _check_project(project)
+
+    meta = frappe.db.get_value(
+        "Project", project, ["expected_start_date", "expected_end_date"], as_dict=True
+    ) or frappe._dict()
+
+    modules = frappe.get_all(
+        "Agile Module",
+        filters={"project": project},
+        fields=["name", "module_name", "gate", "target_go_live", "sme_responsible"],
+        order_by="target_go_live asc, module_name asc",
+        limit_page_length=0,
+    )
+
+    # Earliest task start per module, in one query rather than one per module.
+    earliest = {}
+    if modules:
+        for row in frappe.get_all(
+            "Task",
+            filters={
+                "agile_module": ["in", [m.name for m in modules]],
+                "is_group": 0,
+                "is_template": 0,
+                "exp_start_date": ["is", "set"],
+            },
+            fields=["agile_module", "exp_start_date"],
+            order_by="exp_start_date asc",
+            limit_page_length=0,
+        ):
+            earliest.setdefault(row.agile_module, row.exp_start_date)
+
+    module_bars = []
+    for module in modules:
+        if not module.target_go_live:
+            continue
+        start = earliest.get(module.name) or meta.get("expected_start_date")
+        if not start:
+            continue
+        start = getdate(start)
+        end = getdate(module.target_go_live)
+        if end < start:
+            # A go-live before the work starts is a planning error, not a
+            # zero-width bar; show it as a single day at the go-live.
+            start = end
+        module_bars.append(
+            {
+                "id": module.name,
+                "kind": "module",
+                "label": module.module_name,
+                "gate": module.gate,
+                "start": str(start),
+                "end": str(end),
+                "start_is_inferred": module.name not in earliest,
+            }
+        )
+
+    steps = frappe.get_all(
+        "Cutover Step",
+        filters={"project": project},
+        fields=CUTOVER_FIELDS,
+        order_by="step_order asc, creation asc",
+        limit_page_length=0,
+    )
+    step_bars = []
+    for step in steps:
+        planned_start = step.planned_start or step.actual_start
+        planned_end = step.planned_end or step.actual_end or planned_start
+        if not planned_start or not planned_end:
+            continue
+        step_bars.append(
+            {
+                "id": step.name,
+                "kind": "cutover",
+                "label": step.title,
+                "status": step.status,
+                "start": str(getdate(planned_start)),
+                "end": str(getdate(planned_end)),
+                "actual_start": str(getdate(step.actual_start)) if step.actual_start else None,
+                "actual_end": str(getdate(step.actual_end)) if step.actual_end else None,
+                "depends_on": step.depends_on,
+            }
+        )
+
+    return {
+        "modules": module_bars,
+        "cutover": step_bars,
+        "project": dict(meta, name=project),
+    }
 
 
 @frappe.whitelist()

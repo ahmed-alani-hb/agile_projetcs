@@ -16,8 +16,19 @@
         <span class="inline-block h-2 w-4 rounded-sm bg-red-500"></span>
         Critical path ({{ timeline.data?.critical_path?.length || 0 }})
       </span>
+      <span v-if="hasMilestones" class="flex items-center gap-1.5 text-xs text-gray-500">
+        <span class="inline-block h-2 w-2 rotate-45 bg-indigo-700"></span>
+        Milestone
+      </span>
+      <span v-if="hasActuals" class="flex items-center gap-1.5 text-xs text-gray-500">
+        <span class="inline-block h-0.5 w-4 bg-gray-800"></span>
+        Actual
+      </span>
       <span class="flex-1"></span>
-      <span class="text-xs text-gray-400">Drag a bar to reschedule · hover for details</span>
+      <span class="hidden text-xs text-gray-400 lg:inline">Drag a bar to reschedule</span>
+      <Button variant="subtle" size="sm" :loading="exporting" @click="exportPng">
+        Export PNG
+      </Button>
     </div>
 
     <div class="min-h-0 flex-1 overflow-auto p-4">
@@ -54,6 +65,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { Button } from 'frappe-ui'
 import { createResource } from 'frappe-ui'
 import Gantt from 'frappe-gantt'
 import 'frappe-gantt-css'
@@ -123,17 +135,93 @@ function ganttTasks() {
   }))
 }
 
-// Extra state classes are applied by us, because classList.add() accepts
-// several separate tokens but not one token containing spaces.
+// Everything below is applied by us after the library renders, because
+// frappe-gantt 1.2.2 has no concept of any of it: classList.add() accepts
+// several tokens but not one containing spaces, there is no milestone type,
+// and compute_y() assigns exactly one row per task so a second bar is not
+// expressible. Each patch degrades to "the bar renders normally" if the
+// library changes shape under us.
 function applyStateClasses() {
   if (!gantt || !gantt.bars) return
   for (const bar of gantt.bars) {
     const task = byName.value[bar.task?.id]
     if (!task || !bar.group) continue
-    const extra = []
-    if (task.is_critical) extra.push('gantt-critical')
-    if (task.is_blocked) extra.push('gantt-blocked')
-    if (extra.length) bar.group.classList.add(...extra)
+    // toggle, not add: a reschedule can take a task *off* the critical path,
+    // and an add-only pass would leave it painted red forever.
+    bar.group.classList.toggle('gantt-critical', !!task.is_critical)
+    bar.group.classList.toggle('gantt-blocked', !!task.is_blocked)
+    bar.group.classList.toggle('gantt-milestone', !!task.is_milestone)
+    drawBaseline(bar, task)
+    drawMilestone(bar, task)
+  }
+}
+
+// Planned vs actual. act_start_date / act_end_date exist on every ERPNext Task
+// and were fetched nowhere in this app until now.
+function drawMilestone(bar, task) {
+  const existing = bar.group.querySelector('.gantt-diamond')
+  if (existing) existing.remove()
+  if (!task.is_milestone) return
+  try {
+    const planned = bar.group.querySelector('.bar')
+    if (!planned) return
+    const x = Number(planned.getAttribute('x'))
+    const y = Number(planned.getAttribute('y'))
+    const height = Number(planned.getAttribute('height'))
+    if (![x, y, height].every(Number.isFinite)) return
+    const size = Math.min(height, 14)
+    const cx = x
+    const cy = y + height / 2
+    const diamond = document.createElementNS('http://www.w3.org/2000/svg', 'polygon')
+    diamond.setAttribute('class', 'gantt-diamond')
+    diamond.setAttribute(
+      'points',
+      `${cx},${cy - size / 2} ${cx + size / 2},${cy} ${cx},${cy + size / 2} ${cx - size / 2},${cy}`
+    )
+    bar.group.appendChild(diamond)
+  } catch (err) {
+    // Decoration only.
+  }
+}
+
+function drawBaseline(bar, task) {
+  const existing = bar.group.querySelector('.gantt-actual')
+  if (existing) existing.remove()
+  if (!task.act_start_date || !task.act_end_date || !gantt) return
+
+  try {
+    const planned = bar.group.querySelector('.bar')
+    if (!planned) return
+    const x = Number(planned.getAttribute('x'))
+    const width = Number(planned.getAttribute('width'))
+    const y = Number(planned.getAttribute('y'))
+    const height = Number(planned.getAttribute('height'))
+    if (![x, width, y, height].every(Number.isFinite)) return
+
+    // Map the actual window onto the planned bar's own pixel span, so this
+    // needs no access to the library's internal date scale.
+    const pStart = new Date(task.exp_start_date).getTime()
+    const pEnd = new Date(task.exp_end_date).getTime()
+    const span = pEnd - pStart
+    if (!(span > 0)) return
+    const aStart = new Date(task.act_start_date).getTime()
+    const aEnd = new Date(task.act_end_date).getTime()
+    if (!Number.isFinite(aStart) || !Number.isFinite(aEnd)) return
+
+    const clamp = (value) => Math.max(0, Math.min(1, value))
+    const left = clamp((aStart - pStart) / span)
+    const right = clamp((aEnd - pStart) / span)
+
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
+    rect.setAttribute('class', 'gantt-actual')
+    rect.setAttribute('x', String(x + left * width))
+    rect.setAttribute('width', String(Math.max((right - left) * width, 2)))
+    rect.setAttribute('y', String(y + height - 5))
+    rect.setAttribute('height', '3')
+    rect.setAttribute('rx', '1.5')
+    bar.group.appendChild(rect)
+  } catch (err) {
+    // A baseline is a nicety; never let it take the chart down with it.
   }
 }
 
@@ -205,6 +293,25 @@ function toDateStr(value) {
 }
 
 const updateDates = createResource({ url: 'agile_projects.views.update_task_dates' })
+const criticalPath = createResource({ url: 'agile_projects.views.get_critical_path' })
+
+// Rescheduling can move which tasks have zero slack. Refetch just the path
+// rather than the whole timeline, so the red highlighting stays truthful
+// without costing the user their scroll position.
+function refreshCriticalPath() {
+  criticalPath
+    .submit({ project: props.project, filters: props.filters })
+    .then((data) => {
+      const critical = new Set(data.critical_path || [])
+      for (const task of allTasks.value) task.is_critical = critical.has(task.name)
+      if (timeline.data) timeline.data.critical_path = data.critical_path
+      applyStateClasses()
+    })
+    .catch(() => {
+      // Leave the previous highlighting rather than clearing it; a wrong-but-
+      // stale path is less alarming than every bar suddenly turning grey.
+    })
+}
 
 function persistDates(taskName, start, end) {
   const startStr = toDateStr(start)
@@ -220,12 +327,88 @@ function persistDates(taskName, start, end) {
         task.exp_start_date = startStr
         task.exp_end_date = endStr
       }
+      refreshCriticalPath()
       emit('changed')
     })
     .catch((err) => {
       toast({ title: 'Could not reschedule', text: errorMessage(err), type: 'error' })
       timeline.reload()
     })
+}
+
+const hasMilestones = computed(() => scheduled.value.some((task) => task.is_milestone))
+const hasActuals = computed(() =>
+  scheduled.value.some((task) => task.act_start_date && task.act_end_date)
+)
+
+// The library has no export — it draws SVG. Serialising it ourselves is safe
+// here only because the chart embeds no external images (the `thumbnail`
+// feature is unused), so the canvas is never tainted.
+const exporting = ref(false)
+
+async function exportPng() {
+  const svg = container.value?.querySelector('svg')
+  if (!svg) return
+  exporting.value = true
+  try {
+    const clone = svg.cloneNode(true)
+    const width = svg.width?.baseVal?.value || svg.clientWidth || 1200
+    const height = svg.height?.baseVal?.value || svg.clientHeight || 600
+    clone.setAttribute('width', String(width))
+    clone.setAttribute('height', String(height))
+    // Inline the scoped styles: a detached SVG has no stylesheet, so without
+    // this every bar exports in the library's default white.
+    const style = document.createElementNS('http://www.w3.org/2000/svg', 'style')
+    style.textContent = collectGanttCss()
+    clone.insertBefore(style, clone.firstChild)
+
+    const markup = new XMLSerializer().serializeToString(clone)
+    const url = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`
+    const image = new Image()
+    await new Promise((resolve, reject) => {
+      image.onload = resolve
+      image.onerror = () => reject(new Error('Could not rasterise the chart'))
+      image.src = url
+    })
+
+    const scale = window.devicePixelRatio || 1
+    const canvas = document.createElement('canvas')
+    canvas.width = width * scale
+    canvas.height = height * scale
+    const context = canvas.getContext('2d')
+    context.scale(scale, scale)
+    context.fillStyle = '#ffffff'
+    context.fillRect(0, 0, width, height)
+    context.drawImage(image, 0, 0)
+
+    const link = document.createElement('a')
+    link.download = `${props.project}-timeline.png`
+    link.href = canvas.toDataURL('image/png')
+    link.click()
+  } catch (err) {
+    toast({ title: 'Could not export', text: String(err?.message || err), type: 'error' })
+  } finally {
+    exporting.value = false
+  }
+}
+
+function collectGanttCss() {
+  const rules = []
+  for (const sheet of Array.from(document.styleSheets)) {
+    let list
+    try {
+      list = sheet.cssRules
+    } catch (err) {
+      // A cross-origin stylesheet throws on access; skip it.
+      continue
+    }
+    for (const rule of Array.from(list || [])) {
+      if (rule.cssText && /\.bar|\.gantt|\.arrow|\.grid|\.upper-text|\.lower-text/.test(rule.selectorText || '')) {
+        rules.push(rule.cssText)
+      }
+    }
+  }
+  return rules.join('\n')
 }
 
 onBeforeUnmount(() => {
@@ -237,6 +420,32 @@ defineExpose({ reload: () => timeline.reload() })
 </script>
 
 <style>
+/* Status fills. Five gantt-status-* classes were being emitted with only
+   "done" styled, so every other status rendered in the library's default
+   white. These are the board's own colours so the two views agree. */
+.agile-gantt .gantt-status-backlog .bar {
+  fill: #e5e7eb;
+}
+.agile-gantt .gantt-status-todo .bar {
+  fill: #bfdbfe;
+}
+.agile-gantt .gantt-status-inprogress .bar {
+  fill: #fed7aa;
+}
+.agile-gantt .gantt-status-qacodereview .bar {
+  fill: #e9d5ff;
+}
+.agile-gantt .gantt-status-blocked .bar {
+  fill: #fecaca;
+}
+.agile-gantt .gantt-status-done .bar {
+  fill: #bbf7d0;
+}
+.agile-gantt .gantt-status-done .bar-progress {
+  fill: #22c55e;
+}
+
+/* Critical path and blockers override the status fill. */
 .agile-gantt .gantt-critical .bar {
   fill: #ef4444;
 }
@@ -247,7 +456,22 @@ defineExpose({ reload: () => timeline.reload() })
   stroke: #dc2626;
   stroke-width: 2;
 }
-.agile-gantt .gantt-status-done .bar-progress {
-  fill: #22c55e;
+
+/* Actual dates, drawn as a rule inside the planned bar — the library assigns
+   one row per task, so a second full bar is not expressible. */
+.agile-gantt .gantt-actual {
+  fill: #1f2937;
+  opacity: 0.75;
+}
+
+/* Milestones. The library has no milestone type and stretches a zero-duration
+   bar to a full day, so the bar is hidden and a diamond drawn in its place. */
+.agile-gantt .gantt-milestone .bar,
+.agile-gantt .gantt-milestone .bar-progress {
+  fill: transparent;
+  stroke: none;
+}
+.agile-gantt .gantt-diamond {
+  fill: #4338ca;
 }
 </style>

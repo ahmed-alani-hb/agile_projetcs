@@ -94,10 +94,44 @@ than let the feature die quietly, `frontend/src/data/socket.js` watches the
 connection and **falls back to polling** (20s) when it never arrives, and
 refetches whenever the tab regains focus regardless of transport.
 
-### Seven views over the same tasks (`/agile/projects/<project>/<view>`)
+### Metrics (`/agile/projects/<project>/dashboard`) and the portfolio (`/agile/portfolio`)
+
+Velocity, lead time, status and gate mix, effort against estimate, modules past
+their go-live, and cumulative flow. Charts use echarts through frappe-ui — no
+new dependency, it was already installed.
+
+**What can and cannot be known.** Velocity, throughput and lead time are
+computed from `Task.completed_on`, which has always been stamped on completion,
+so they work on the first load rather than after a month of collecting. Module
+gate history comes from `Version` rows, available since modules were
+introduced. Per-status **flow** genuinely cannot be reconstructed — Task
+versioning only began in the collaboration release — so an `Agile Metric
+Snapshot` is written daily and the flow chart states the date its history
+actually begins instead of drawing a line back through nothing.
+
+Effort is aggregated per module and person, never over time: `log_time`
+synthesises its from/to window to avoid ERPNext's overlap validation, so the
+duration is trustworthy and the timestamps are not.
+
+The chart palette was validated rather than eyeballed, and that changed the
+design. The board's status colours fail in a chart — gray reads as "no data",
+and Blocked against Done measures ΔE 7.4 for deuteranopes while sitting
+adjacent in a stack. Since one hue cannot separate six adjacent bands, the flow
+chart collapses to the four states a rollout steers on, and the full six-status
+split is a bar chart where whitespace and labels carry identity.
+
+### The roadmap Gantt (`/agile/projects/<project>/roadmap`)
+
+Modules and cutover steps on one timeline: each module runs to its target
+go-live, each cutover step shows planned against actual. A module has no start
+date of its own, so its bar begins at the earliest start among its tasks — and
+says so when it had to fall back to the project start, because a chart that
+quietly invents dates is worse than one that admits to it.
+
+### Nine views over the same tasks (`/agile/projects/<project>/<view>`)
 
 Switch between **Board · List · Table · Timeline · Calendar · Modules ·
-Cutover**. Filters (search, status, SME, priority, overdue) apply across every
+Cutover · Metrics · Roadmap**. Filters (search, status, SME, priority, overdue) apply across every
 task view and can be stored as per-user **saved views**.
 
 - **List** — grouped by status, priority or SME with point subtotals.
@@ -106,8 +140,11 @@ task view and can be stored as per-user **saved views**.
   individually, so one task rejected by the dependency gate never silently
   discards the rest — you get a per-task report.
 - **Timeline** — a Gantt (`frappe-gantt`) with drag-to-reschedule, dependency
-  arrows and a **computed critical path**. Stock ERPNext's Gantt renders
-  dependencies read-only and has no critical-path concept.
+  arrows and a **computed critical path** that is recomputed after every drag.
+  Also milestones, an actual-vs-planned rule inside each bar, and PNG export —
+  none of which the library supports natively, so all three are drawn after it
+  renders and degrade to a plain bar if they fail. Stock ERPNext's Gantt
+  renders dependencies read-only and has no critical-path concept.
 - **Calendar** — tasks on their due dates, colour-coded by status.
 - **My Work** (`/agile/my-work`) — everything assigned to you across *all*
   projects, bucketed into Overdue / Blocked / Due today / This week / Later.
@@ -273,7 +310,12 @@ bench --site yoursite run-tests --app agile_projects
 `agile_projects/tests/test_gates.py` covers the gate model, the migration's
 derivation ladder and progress blending as pure functions (no database).
 `test_agile_module.py` exercises the three gate rules against real documents.
-`test_collaboration.py` pins the @mention parser against the exact HTML the
+`test_metrics.py` covers the metric arithmetic — including that an unestimated
+task weighs one point rather than zero, and that "no data" stays `None` rather
+than becoming a misleading `0`. `test_wiring.py` guards agreements no single
+file can enforce: the view-type list that lives in four places, that every
+endpoint the SPA calls exists, and that the chart palette keeps its validated
+values. `test_collaboration.py` pins the @mention parser against the exact HTML the
 editor emits, the activity formatter, and — most importantly — that a comment
 body which parses as JSON is still sanitised.
 
@@ -317,6 +359,16 @@ Module gates and cutover live in `agile_projects/modules.py`:
 | `get_cutover` / `add_cutover_step` / `update_cutover_step` / `delete_cutover_step` | Runbook CRUD |
 | `start_step` / `complete_step` / `signoff_step` | Runbook execution, stamping actual times |
 | `reorder_cutover` | Re-sequence the runbook |
+| `get_roadmap` | Modules and cutover steps as Gantt bars |
+
+Metrics live in `agile_projects/metrics.py`:
+
+| Endpoint | Purpose |
+|---|---|
+| `get_project_metrics` | Velocity, lead time, status/gate mix, effort, at-risk modules |
+| `get_flow_metrics` | Cumulative flow from snapshots, with its true start date |
+| `get_portfolio_metrics` | The same across every visible project |
+| `take_snapshot_now` | Start the flow series without waiting for the nightly job |
 
 Collaboration lives in `agile_projects/collaboration.py`:
 
@@ -345,6 +397,12 @@ Collaboration lives in `agile_projects/collaboration.py`:
   on the next fetch. Publishing from a `Comment` doc_event would fix that at
   the cost of firing site-wide for every Like and Info comment.
 - Boards do not live-sync. Someone else's card move shows on your next refresh.
+- Cumulative flow starts the day the snapshot job first runs; there is no
+  backfill, because the data to backfill from was never recorded.
+- Milestones, baselines and PNG export are drawn on top of `frappe-gantt`
+  rather than by it. A library upgrade could break them; each fails to a plain
+  bar rather than an empty chart.
+- Snapshot rows accumulate at one per project per day and are never purged.
 - @mentions and assignment list **users with an app role**, not employees.
   `Employee.user_id` is optional in ERPNext and usually blank, so sourcing them
   from Employee silently hid most people. *SME Responsible* is still a genuine

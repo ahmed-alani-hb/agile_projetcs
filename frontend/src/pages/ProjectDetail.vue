@@ -109,6 +109,11 @@
         ref="activeView"
         :project="projectId"
       />
+      <RoadmapView
+        v-else-if="view === 'roadmap'"
+        ref="activeView"
+        :project="projectId"
+      />
     </main>
 
     <TaskDetailModal
@@ -146,6 +151,7 @@ import SheetView from '@/views/SheetView.vue'
 import ModulesView from '@/views/ModulesView.vue'
 import CutoverView from '@/views/CutoverView.vue'
 import DashboardView from '@/views/DashboardView.vue'
+import RoadmapView from '@/views/RoadmapView.vue'
 import { toast, errorMessage } from '@/utils/toast'
 
 const props = defineProps({

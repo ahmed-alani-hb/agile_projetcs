@@ -29,6 +29,8 @@ LIST_FIELDS = [
     "sme_responsible",
     "exp_start_date",
     "exp_end_date",
+    "act_start_date",
+    "act_end_date",
     "progress",
     "actual_time",
     "expected_time",
@@ -54,6 +56,7 @@ VIEW_TYPES = (
     "modules",
     "cutover",
     "dashboard",
+    "roadmap",
 )
 
 
@@ -423,6 +426,31 @@ def compute_critical_path(tasks, edges):
         latest_start[node] = finish - duration[node]
 
     return {n for n in by_name if latest_start[n] - earliest_start[n] == 0}
+
+
+@frappe.whitelist()
+def get_critical_path(project, filters=None):
+    """Just the recomputed critical path, without the rest of the payload.
+
+    The timeline deliberately does not reload after a drag — rebuilding the
+    chart throws away the user's scroll position — but a reschedule can change
+    which tasks have zero slack. Without this the red highlighting keeps
+    showing the path from before the drag.
+    """
+    _ensure_app_access()
+    frappe.has_permission("Project", doc=project, throw=True)
+
+    query_filters, or_filters = _build_filters(project, filters)
+    tasks = frappe.get_list(
+        "Task",
+        filters=query_filters,
+        or_filters=or_filters,
+        fields=["name", "exp_start_date", "exp_end_date", "expected_time"],
+        order_by="exp_start_date asc, creation asc",
+        limit_page_length=0,
+    )
+    edges = _dependency_edges([t.name for t in tasks])
+    return {"critical_path": sorted(compute_critical_path(tasks, edges))}
 
 
 @frappe.whitelist(methods=["POST"])
