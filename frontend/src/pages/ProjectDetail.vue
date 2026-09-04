@@ -119,7 +119,7 @@
 
 <script setup>
 import { computed, defineAsyncComponent, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { Button, createResource } from 'frappe-ui'
 import AppHeader from '@/components/AppHeader.vue'
 import ViewSwitcher from '@/components/ViewSwitcher.vue'
@@ -148,6 +148,7 @@ const props = defineProps({
 })
 
 const router = useRouter()
+const route = useRoute()
 
 const filters = ref({})
 const activeView = ref(null)
@@ -178,6 +179,18 @@ const percent = computed(() => meta.data?.percent_complete || 0)
 // task-shaped toolbar controls would only mislead there.
 const TASK_VIEWS = ['board', 'list', 'table', 'timeline', 'calendar', 'sheet']
 const isTaskView = computed(() => TASK_VIEWS.includes(props.view))
+
+// Notifications deep-link as ?task=<name>; open the drawer for it, then drop
+// the query so a later refresh does not reopen a drawer the user closed.
+watch(
+  () => route.query.task,
+  (task) => {
+    if (!task) return
+    openTask(String(task))
+    router.replace({ query: { ...route.query, task: undefined } })
+  },
+  { immediate: true }
+)
 
 function changeView(next) {
   router.push({ name: 'ProjectDetail', params: { projectId: props.projectId, view: next } })

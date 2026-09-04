@@ -149,6 +149,11 @@
             </div>
 
             <div class="border-t border-gray-100 pt-4">
+              <p class="mb-2 text-xs font-medium text-gray-500">Discussion</p>
+              <CommentThread doctype="Agile Module" :name="detail.name" />
+            </div>
+
+            <div class="border-t border-gray-100 pt-4">
               <button
                 class="text-xs font-medium text-red-600 hover:text-red-700"
                 @click="removeModule"
@@ -167,6 +172,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { createResource } from 'frappe-ui'
 import EmployeePicker from './EmployeePicker.vue'
+import CommentThread from './CommentThread.vue'
 import {
   GATES,
   GATE_META,

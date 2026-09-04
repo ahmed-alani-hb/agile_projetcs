@@ -17,6 +17,7 @@ from agile_projects.api import (
     _get_blockers,
     normalize_task_dates,
 )
+from agile_projects.collaboration import attach_assignees
 from agile_projects.overrides.task import AGILE_STATUSES, DONE
 
 LIST_FIELDS = [
@@ -34,6 +35,7 @@ LIST_FIELDS = [
     "board_order",
     "project",
     "agile_module",
+    "_assign",
     "modified",
 ]
 
@@ -135,10 +137,13 @@ def _build_filters(project=None, filters=None):
 
 
 def _decorate(tasks):
-    """Attach SME display info and blocker state to a list of task rows."""
+    """Attach SME display info, assignees and blocker state to task rows."""
     if not tasks:
         return tasks
     _attach_employee_info(tasks)
+    # Also strips the raw `_assign` JSON blob, which is an implementation
+    # detail the client has no business parsing.
+    attach_assignees(tasks)
     blockers = _get_blockers([t.name for t in tasks])
     for task in tasks:
         task["blocked_by"] = blockers.get(task.name, [])

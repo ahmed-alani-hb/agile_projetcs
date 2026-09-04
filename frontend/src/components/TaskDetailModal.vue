@@ -49,11 +49,11 @@
         </div>
 
         <!-- tabs -->
-        <div class="flex gap-1 border-b border-gray-200 px-5 pt-2">
+        <div class="flex gap-0.5 border-b border-gray-200 px-5 pt-2">
           <button
             v-for="tab in tabs"
             :key="tab.key"
-            class="rounded-t-md px-3 py-2 text-sm font-medium"
+            class="rounded-t-md px-2.5 py-2 text-sm font-medium"
             :class="
               activeTab === tab.key
                 ? 'border-b-2 border-indigo-600 text-indigo-700'
@@ -172,6 +172,16 @@
                   />
                 </div>
                 <div class="col-span-2">
+                  <label class="text-xs font-medium text-gray-500">Assigned to</label>
+                  <div class="mt-1">
+                    <AssigneePicker
+                      :task="taskName"
+                      :assignees="detail.data.assignees || []"
+                      @changed="onAssigneesChanged"
+                    />
+                  </div>
+                </div>
+                <div class="col-span-2">
                   <label class="text-xs font-medium text-gray-500">Module</label>
                   <select
                     v-model="form.agile_module"
@@ -249,6 +259,22 @@
             </div>
 
             <!-- CHECKLIST TAB -->
+            <!-- DISCUSSION TAB -->
+            <div v-show="activeTab === 'discussion'" class="flex h-full flex-col">
+              <AttachmentList doctype="Task" :name="taskName" class="mb-4" />
+              <CommentThread
+                doctype="Task"
+                :name="taskName"
+                class="min-h-0 flex-1"
+                @posted="emit('task-updated')"
+              />
+            </div>
+
+            <!-- ACTIVITY TAB -->
+            <div v-show="activeTab === 'activity'">
+              <ActivityFeed doctype="Task" :name="taskName" />
+            </div>
+
             <div v-show="activeTab === 'checklist'">
               <p class="mb-3 rounded-md bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
                 Superseded by <span class="font-medium">Modules</span>, which adds phase gates and
@@ -280,6 +306,10 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { TextEditor, createResource } from 'frappe-ui'
 import EmployeePicker from './EmployeePicker.vue'
+import AssigneePicker from './AssigneePicker.vue'
+import CommentThread from './CommentThread.vue'
+import ActivityFeed from './ActivityFeed.vue'
+import AttachmentList from './AttachmentList.vue'
 import ChecklistSection from './ChecklistSection.vue'
 import TimesheetSection from './TimesheetSection.vue'
 import { STATUSES, STATUS_META, POINT_OPTIONS, PRIORITIES } from '@/utils/statuses'
@@ -295,8 +325,10 @@ const emit = defineEmits(['update:modelValue', 'task-updated', 'progress'])
 
 const tabs = [
   { key: 'details', label: 'Details' },
-  { key: 'checklist', label: 'ERP Checklist' },
+  { key: 'discussion', label: 'Discussion' },
+  { key: 'checklist', label: 'Checklist' },
   { key: 'time', label: 'Time' },
+  { key: 'activity', label: 'Activity' },
 ]
 
 const activeTab = ref('details')
@@ -392,6 +424,12 @@ function changeStatus(status) {
       toast({ title: 'Status change rejected', text: errorMessage(err), type: 'error', timeout: 8000 })
       detail.submit({ task: props.taskName })
     })
+}
+
+function onAssigneesChanged(assignees) {
+  if (detail.data) detail.data.assignees = assignees
+  // The board card shows avatars, so the view behind the drawer is now stale.
+  emit('task-updated')
 }
 
 function saveDescription() {

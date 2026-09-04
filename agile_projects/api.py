@@ -213,6 +213,7 @@ def get_board(project):
             "progress",
             "actual_time",
             "board_order",
+            "_assign",
         ],
         # board_order is our own indexed ordering column (stock Kanban keeps
         # order in an unsortable JSON blob)
@@ -222,6 +223,7 @@ def get_board(project):
 
     blockers = _get_blockers([t.name for t in tasks])
     _attach_employee_info(tasks)
+    _attach_assignees(tasks)
 
     columns = {status: [] for status in AGILE_STATUSES}
     for task in tasks:
@@ -266,6 +268,17 @@ def _get_blockers(task_names):
                 {"task": info.name, "subject": info.subject, "status": info.status}
             )
     return blockers
+
+
+def _attach_assignees(rows):
+    """Decode `_assign` into resolved users.
+
+    Imported here rather than at module scope because collaboration.py imports
+    this module — a top-level import would be circular.
+    """
+    from agile_projects.collaboration import attach_assignees
+
+    attach_assignees(rows)
 
 
 def _attach_employee_info(tasks):
@@ -350,8 +363,12 @@ def get_task(task):
             "agile_module",
         )
     }
+    assignee_rows = [{"_assign": doc.get("_assign")}]
+    _attach_assignees(assignee_rows)
+
     out.update(
         {
+            "assignees": assignee_rows[0]["assignees"],
             "project_name": frappe.db.get_value("Project", doc.project, "project_name")
             if doc.project
             else None,

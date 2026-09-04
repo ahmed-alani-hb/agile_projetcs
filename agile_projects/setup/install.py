@@ -99,7 +99,7 @@ CUSTOM_FIELDS = {
 }
 
 PROPERTY_SETTERS = [
-    # (doctype, fieldname, property, value, property_type)
+    # (doctype, fieldname, property, value, property_type[, for_doctype])
     ("Task", "status", "options", AGILE_STATUS_OPTIONS, "Text"),
     ("Task", "status", "default", "Backlog", "Text"),
     ("Task", "completed_by", "depends_on", 'eval: doc.status == "Done"', "Text"),
@@ -110,6 +110,10 @@ PROPERTY_SETTERS = [
     # release as the rollback path for the checklist -> modules migration;
     # removing this line is all it takes to thaw it.
     ("Project", "erp_module_readiness", "read_only", "1", "Check"),
+    # Task does not version its own changes by default, so the activity
+    # timeline would have nothing to read. for_doctype=True makes this a
+    # DocType-level property rather than a DocField one.
+    ("Task", None, "track_changes", "1", "Check", True),
 ]
 
 
@@ -126,13 +130,16 @@ def after_migrate():
 
 def ensure_customizations():
     create_custom_fields(CUSTOM_FIELDS, ignore_validate=True)
-    for doctype, fieldname, prop, value, property_type in PROPERTY_SETTERS:
+    for setter in PROPERTY_SETTERS:
+        doctype, fieldname, prop, value, property_type = setter[:5]
+        for_doctype = setter[5] if len(setter) > 5 else False
         make_property_setter(
             doctype,
             fieldname,
             prop,
             value,
             property_type,
+            for_doctype=for_doctype,
             validate_fields_for_doctype=False,
         )
     frappe.clear_cache(doctype="Task")

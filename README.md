@@ -50,6 +50,50 @@ times, a live elapsed clock, and a `depends_on` link enforced on completion
 (not on start, so a step can be prepared early). Steps are started, completed,
 skipped, failed and signed off — each stamping who and when.
 
+### Discussion, assignment and evidence
+
+Built on Frappe's own primitives, so everything written from the SPA is visible
+in Desk and vice versa.
+
+- **Comments with @mentions** on tasks and modules. Mentioning someone notifies
+  them — but only if they can already read the document; a notification into a
+  document you cannot open is both useless and a leak of its subject.
+- **Assignment** (Frappe `ToDo`) with avatars on board cards and a picker in the
+  task drawer. This is distinct from *SME Responsible*: a module has one owner,
+  a task can have several people doing it. Assigned tasks appear in the
+  assignee's **My Work** — which previously filtered on assignments the UI had
+  no way to create.
+- **Attachments**, stored **private** (`is_private=1`), so a UAT screenshot is
+  not readable by anyone who guesses the URL.
+- **Activity timeline** merging field changes (Frappe `Version`) and comments
+  into one story: *"changed status from To Do to In Progress"*. Installation
+  turns on `track_changes` for Task, which ERPNext leaves off.
+- **Notification bell** in the header, with an unread count.
+
+Comment bodies are rich text rendered with `v-html`, so they are sanitised on
+write by `collaboration.clean_comment_html`. That does two things rather than
+one: `frappe.utils.sanitize_html` returns its input **untouched** when the body
+happens to parse as JSON, so dangerous elements are stripped outright first and
+`always_sanitize=True` is passed to close the short-circuit.
+
+Every endpoint taking a `(doctype, name)` pair from the client checks it
+against an allowlist (`Task`, `Agile Module`, `Cutover Step`, `Project`)
+*before* the permission check — otherwise reading comments would be a read
+primitive over every doctype on the site.
+
+### Live updates, and what happens when they aren't
+
+The notification bell and open comment threads update over Frappe's socket.io.
+Realtime is deliberately **not** wired to the boards: card positions still
+refresh explicitly, which keeps paginated views from losing loaded pages.
+
+Realtime is also the one part that can silently do nothing in production —
+frappe-ui's `initSocket` always dials HTTPS on the site origin, so it needs
+nginx proxying `/socket.io` and breaks outright on an HTTP-only site. Rather
+than let the feature die quietly, `frontend/src/data/socket.js` watches the
+connection and **falls back to polling** (20s) when it never arrives, and
+refetches whenever the tab regains focus regardless of transport.
+
 ### Seven views over the same tasks (`/agile/projects/<project>/<view>`)
 
 Switch between **Board · List · Table · Timeline · Calendar · Modules ·
@@ -130,6 +174,9 @@ read-only.
   ERPNext offers no UI for this outside the Desk form's child table
 - **Module** picker: roll the task up to an Agile Module, so it counts
   towards that module's Sign-off gate
+- **Assigned to**: add and remove assignees; they appear on the board card
+- **Discussion** tab: comments with @mentions, plus attachments
+- **Activity** tab: field changes and comments in one timeline
 - **ERP Checklist** tab: the superseded readiness grid, now read-only
 - **Time** tab: log hours to standard ERPNext **Timesheets** (submitted, so
   hours roll into `Task.actual_time` and project costing)
@@ -194,6 +241,8 @@ an active **Employee** record whose *User ID* is the logged-in user.
   Cancelled/On hold respected
 - Doc events recompute `Project.percent_complete` (ERPNext's own
   calculation counts statuses that no longer exist)
+- Property Setter turning on `track_changes` for **Task**, so the activity
+  timeline has `Version` records to read
 
 Customizations are re-asserted on every `bench migrate`, so ERPNext
 upgrades cannot strand them.
@@ -224,6 +273,9 @@ bench --site yoursite run-tests --app agile_projects
 `agile_projects/tests/test_gates.py` covers the gate model, the migration's
 derivation ladder and progress blending as pure functions (no database).
 `test_agile_module.py` exercises the three gate rules against real documents.
+`test_collaboration.py` pins the @mention parser against the exact HTML the
+editor emits, the activity formatter, and — most importantly — that a comment
+body which parses as JSON is still sanitised.
 
 ## API surface
 
@@ -266,6 +318,16 @@ Module gates and cutover live in `agile_projects/modules.py`:
 | `start_step` / `complete_step` / `signoff_step` | Runbook execution, stamping actual times |
 | `reorder_cutover` | Re-sequence the runbook |
 
+Collaboration lives in `agile_projects/collaboration.py`:
+
+| Endpoint | Purpose |
+|---|---|
+| `get_comments` / `add_comment` / `delete_comment` | Discussion, with @mention notifications |
+| `assign_task` / `unassign_task` / `get_assignees` | Frappe assignment from the SPA |
+| `get_attachments` / `delete_attachment` | Files (uploads go through Frappe's own `upload_file`) |
+| `get_activity` | Field changes and comments as one timeline |
+| `get_notifications` / `mark_notification_read` / `mark_all_notifications_read` | The header bell |
+
 ## Known limitations
 
 - The Desk *Project → Set Status* action writes legacy Task statuses via a
@@ -278,6 +340,10 @@ Module gates and cutover live in `agile_projects/modules.py`:
   Property Setter.
 - A module's gate is not derived from its tasks; someone has to move it. That
   is deliberate — a gate is an assertion, not a calculation.
+- A comment written in **Desk** does not push to an open SPA thread; it appears
+  on the next fetch. Publishing from a `Comment` doc_event would fix that at
+  the cost of firing site-wide for every Like and Info comment.
+- Boards do not live-sync. Someone else's card move shows on your next refresh.
 
 ## License
 

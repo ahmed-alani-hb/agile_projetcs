@@ -22,6 +22,7 @@
         </div>
       </div>
       <div class="flex shrink-0 items-center gap-3">
+        <NotificationBell />
         <div class="flex items-center gap-2">
           <img
             v-if="userInfo.data?.user_image"
@@ -50,6 +51,7 @@
 <script setup>
 import { onMounted } from 'vue'
 import { Button } from 'frappe-ui'
+import NotificationBell from './NotificationBell.vue'
 import { session, logout, userInfo } from '@/data/session'
 import { initials } from '@/utils/format'
 
