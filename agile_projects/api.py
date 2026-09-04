@@ -53,6 +53,7 @@ TASK_EDITABLE_FIELDS = {
     "expected_time",
     "progress",
     "blocked_reason",
+    "agile_module",
 }
 
 CHECKLIST_EDITABLE_FIELDS = {
@@ -130,6 +131,11 @@ def get_projects():
         filters={"parenttype": "Project", "parent": ["in", names]},
         fields=["parent", "functional_signoff"],
     )
+    module_rows = frappe.get_all(
+        "Agile Module",
+        filters={"project": ["in", names]},
+        fields=["project", "gate"],
+    )
 
     tasks_by_project = {}
     for row in task_counts:
@@ -145,15 +151,27 @@ def get_projects():
         if row.functional_signoff:
             stats["signed_off"] += 1
 
+    modules_by_project = {}
+    for row in module_rows:
+        stats = modules_by_project.setdefault(row.project, {"total": 0, "live": 0})
+        stats["total"] += 1
+        if row.gate == "Live":
+            stats["live"] += 1
+
     for p in projects:
         tstats = tasks_by_project.get(p.name, {})
         cstats = checklist_by_project.get(p.name, {})
+        mstats = modules_by_project.get(p.name, {})
         p.update(
             {
                 "total_tasks": tstats.get("total", 0),
                 "done_tasks": tstats.get("done", 0),
+                # Legacy counters, kept while the frozen checklist grid is the
+                # rollback path — the card prefers modules when it has them.
                 "checklist_total": cstats.get("total", 0),
                 "checklist_signed_off": cstats.get("signed_off", 0),
+                "module_total": mstats.get("total", 0),
+                "module_live": mstats.get("live", 0),
             }
         )
     return projects
@@ -329,6 +347,7 @@ def get_task(task):
             "completed_on",
             "completed_by",
             "owner",
+            "agile_module",
         )
     }
     out.update(

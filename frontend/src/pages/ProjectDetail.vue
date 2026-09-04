@@ -26,16 +26,19 @@
       <div class="flex flex-wrap items-center gap-2">
         <ViewSwitcher :model-value="view" @update:model-value="changeView" />
         <span class="hidden h-5 w-px bg-gray-200 sm:block"></span>
-        <FilterBar v-model="filters" />
+        <FilterBar v-if="isTaskView" v-model="filters" />
         <span class="flex-1"></span>
         <SavedViews
+          v-if="isTaskView"
           :project="projectId"
           :view-type="view"
           :filters="filters"
           @apply="applySavedView"
         />
         <Button variant="subtle" size="sm" @click="refresh">Refresh</Button>
-        <Button variant="solid" size="sm" @click="showNewTask = true">New Task</Button>
+        <Button v-if="isTaskView" variant="solid" size="sm" @click="showNewTask = true">
+          New Task
+        </Button>
       </div>
     </div>
 
@@ -89,6 +92,18 @@
         @open-task="openTask"
         @changed="onViewChanged"
       />
+      <ModulesView
+        v-else-if="view === 'modules'"
+        ref="activeView"
+        :project="projectId"
+        @progress="onProgress"
+      />
+      <CutoverView
+        v-else-if="view === 'cutover'"
+        ref="activeView"
+        :project="projectId"
+        @changed="onViewChanged"
+      />
     </main>
 
     <TaskDetailModal
@@ -123,6 +138,8 @@ import TaskTableView from '@/views/TaskTableView.vue'
 import TimelineView from '@/views/TimelineView.vue'
 import CalendarView from '@/views/CalendarView.vue'
 import SheetView from '@/views/SheetView.vue'
+import ModulesView from '@/views/ModulesView.vue'
+import CutoverView from '@/views/CutoverView.vue'
 import { toast, errorMessage } from '@/utils/toast'
 
 const props = defineProps({
@@ -156,6 +173,11 @@ watch(
 )
 
 const percent = computed(() => meta.data?.percent_complete || 0)
+
+// Modules and cutover have their own add flows and their own filters; the
+// task-shaped toolbar controls would only mislead there.
+const TASK_VIEWS = ['board', 'list', 'table', 'timeline', 'calendar', 'sheet']
+const isTaskView = computed(() => TASK_VIEWS.includes(props.view))
 
 function changeView(next) {
   router.push({ name: 'ProjectDetail', params: { projectId: props.projectId, view: next } })

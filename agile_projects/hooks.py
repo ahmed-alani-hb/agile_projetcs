@@ -46,6 +46,13 @@ doc_events = {
         "on_update": "agile_projects.progress.on_task_change",
         "after_delete": "agile_projects.progress.on_task_change",
     },
+    # A gate move is the other half of project progress. Note both Task
+    # handlers above are bare strings, not lists — a second handler on either
+    # would silently replace on_task_change rather than run alongside it.
+    "Agile Module": {
+        "on_update": "agile_projects.progress.on_module_change",
+        "after_delete": "agile_projects.progress.on_module_change",
+    },
 }
 
 # ---------------------------------------------------------------------------

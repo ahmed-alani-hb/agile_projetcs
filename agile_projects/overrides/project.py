@@ -45,6 +45,8 @@ class AgileProject(Project):
     def has_progress_content(self):
         if self.get("erp_module_readiness"):
             return True
+        if frappe.db.exists("Agile Module", {"project": self.name}):
+            return True
         return bool(
             frappe.db.exists("Task", {"project": self.name, "is_group": 0, "is_template": 0})
         )

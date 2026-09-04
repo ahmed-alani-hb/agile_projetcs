@@ -79,3 +79,46 @@ export const PLATFORM_COLORS = {
 
 export const CONFIG_STATUSES = ['Not Started', 'In Progress', 'Configured', 'Verified']
 export const MIGRATION_STATUSES = ['Not Started', 'In Progress', 'Migrated', 'Validated']
+
+// Must stay in sync with GATES in
+// agile_projects/agile_projects/doctype/agile_module/agile_module.py.
+// The gate board also receives the authoritative list from get_modules.
+export const GATES = ['Configure', 'Migrate', 'UAT', 'Sign-off', 'Live']
+
+export const GATE_META = {
+  Configure: {
+    dot: 'bg-gray-400',
+    pill: 'bg-gray-100 text-gray-700',
+    column: 'border-gray-300',
+  },
+  Migrate: {
+    dot: 'bg-blue-500',
+    pill: 'bg-blue-100 text-blue-700',
+    column: 'border-blue-400',
+  },
+  UAT: {
+    dot: 'bg-orange-500',
+    pill: 'bg-orange-100 text-orange-700',
+    column: 'border-orange-400',
+  },
+  'Sign-off': {
+    dot: 'bg-purple-500',
+    pill: 'bg-purple-100 text-purple-700',
+    column: 'border-purple-400',
+  },
+  Live: {
+    dot: 'bg-green-500',
+    pill: 'bg-green-100 text-green-700',
+    column: 'border-green-400',
+  },
+}
+
+export const CUTOVER_STATUSES = ['Pending', 'In Progress', 'Done', 'Skipped', 'Failed']
+
+export const CUTOVER_STATUS_COLORS = {
+  Pending: 'bg-gray-100 text-gray-700',
+  'In Progress': 'bg-orange-100 text-orange-700',
+  Done: 'bg-green-100 text-green-700',
+  Skipped: 'bg-gray-100 text-gray-500',
+  Failed: 'bg-red-100 text-red-700',
+}

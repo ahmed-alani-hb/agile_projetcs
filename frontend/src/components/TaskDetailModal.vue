@@ -171,6 +171,22 @@
                     @change="saveField('exp_end_date', form.exp_end_date)"
                   />
                 </div>
+                <div class="col-span-2">
+                  <label class="text-xs font-medium text-gray-500">Module</label>
+                  <select
+                    v-model="form.agile_module"
+                    class="mt-1 w-full rounded-md border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    @change="saveField('agile_module', form.agile_module)"
+                  >
+                    <option :value="null">Not linked to a module</option>
+                    <option v-for="module in moduleOptions" :key="module.name" :value="module.name">
+                      {{ module.module_name }} — {{ module.gate }}
+                    </option>
+                  </select>
+                  <p class="mt-1 text-[11px] text-gray-400">
+                    A module cannot reach Sign-off while any task linked to it is unfinished.
+                  </p>
+                </div>
               </div>
 
               <!-- dependencies / blockers (editable — stock ERPNext's Gantt is read-only) -->
@@ -234,8 +250,13 @@
 
             <!-- CHECKLIST TAB -->
             <div v-show="activeTab === 'checklist'">
+              <p class="mb-3 rounded-md bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                Superseded by <span class="font-medium">Modules</span>, which adds phase gates and
+                task rollup. Read-only here for one release while the migration settles.
+              </p>
               <ChecklistSection
                 v-if="detail.data.project"
+                readonly
                 :project="detail.data.project"
                 @progress="(value) => emit('progress', value)"
               />
@@ -289,6 +310,7 @@ const form = reactive({
   exp_start_date: '',
   exp_end_date: '',
   progress: 0,
+  agile_module: null,
 })
 
 const detail = createResource({
@@ -304,6 +326,7 @@ const detail = createResource({
     form.exp_start_date = toDateInput(data.exp_start_date)
     form.exp_end_date = toDateInput(data.exp_end_date)
     form.progress = data.progress || 0
+    form.agile_module = data.agile_module || null
   },
   onError(err) {
     toast({ title: 'Failed to load task', text: errorMessage(err), type: 'error' })
@@ -399,9 +422,21 @@ const candidates = createResource({
 watch(
   () => detail.data?.project,
   (project) => {
-    if (project) candidates.reload()
+    if (project) {
+      candidates.reload()
+      projectModules.reload()
+    }
   }
 )
+
+const projectModules = createResource({
+  url: 'agile_projects.modules.get_modules',
+  makeParams: () => ({ project: detail.data?.project }),
+  // The picker needs a flat list; the endpoint returns gate columns.
+  transform: (data) => (data.columns || []).flatMap((column) => column.modules),
+})
+
+const moduleOptions = computed(() => projectModules.data || [])
 
 const dependencyOptions = computed(() => {
   const existing = new Set((detail.data?.depends_on || []).map((d) => d.name))

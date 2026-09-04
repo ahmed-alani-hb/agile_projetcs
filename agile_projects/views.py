@@ -33,6 +33,7 @@ LIST_FIELDS = [
     "expected_time",
     "board_order",
     "project",
+    "agile_module",
     "modified",
 ]
 
@@ -41,7 +42,16 @@ LIST_FIELDS = [
 # dependency gate holds.
 BULK_EDITABLE_FIELDS = TASK_EDITABLE_FIELDS | {"status", "blocked_reason"}
 
-VIEW_TYPES = ("board", "list", "table", "timeline", "calendar", "sheet")
+VIEW_TYPES = (
+    "board",
+    "list",
+    "table",
+    "timeline",
+    "calendar",
+    "sheet",
+    "modules",
+    "cutover",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -76,7 +86,7 @@ def _build_filters(project=None, filters=None):
     if status:
         out["status"] = ["in", status] if isinstance(status, (list, tuple)) else status
 
-    for field in ("priority", "sme_responsible"):
+    for field in ("priority", "sme_responsible", "agile_module"):
         value = filters.get(field)
         if value:
             out[field] = ["in", value] if isinstance(value, (list, tuple)) else value

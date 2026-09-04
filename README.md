@@ -13,11 +13,48 @@ slide-out task drawer.
 
 ## Features
 
-### Five views over the same tasks (`/agile/projects/<project>/<view>`)
+### Module gates — the delivery spine (`/agile/projects/<project>/modules`)
 
-Switch between **Board · List · Table · Timeline · Calendar**. Filters (search,
-status, SME, priority, overdue) apply across every view and can be stored as
-per-user **saved views**.
+Stock ERPNext has no concept of an ERP module, so a rollout is planned as an
+undifferentiated pile of tasks. Here a module is a first-class document with a
+**phase gate** it has to earn its way through:
+
+**Configure → Migrate → UAT → Sign-off → Live**
+
+Drag a card between columns to move its gate. Three rules are **enforced on the
+server**, in the `Agile Module` controller — so they hold in Desk as well as
+the SPA:
+
+| Moving to | Refused unless |
+|---|---|
+| **UAT** | the data migration is *Migrated* or *Validated* |
+| **Sign-off** | every task linked to the module is *Done* |
+| **Live** | *Functional Sign-off* is ticked |
+
+A move is checked at **every gate it passes through**, so dragging a card from
+Configure straight to Live is not a shortcut past UAT. Moving a module
+*backwards* is always allowed — a correction should never be trapped. Each
+refusal names the blocking gate, the reason, and the fix.
+
+Open **blocked** tasks are deliberately *not* a gate: they show as a red count
+on the card, because a hard block there would fire too often to respect.
+
+Tasks roll up to a module through a new `agile_module` link, so every task view
+can filter by module and a module card shows its own point-weighted progress.
+
+### The cutover runbook (`/agile/projects/<project>/cutover`)
+
+Cutover is the riskiest hour of a rollout and the one nobody wants to
+improvise. An ordered runbook of **Cutover Steps**: owner, planned vs actual
+times, a live elapsed clock, and a `depends_on` link enforced on completion
+(not on start, so a step can be prepared early). Steps are started, completed,
+skipped, failed and signed off — each stamping who and when.
+
+### Seven views over the same tasks (`/agile/projects/<project>/<view>`)
+
+Switch between **Board · List · Table · Timeline · Calendar · Modules ·
+Cutover**. Filters (search, status, SME, priority, overdue) apply across every
+task view and can be stored as per-user **saved views**.
 
 - **List** — grouped by status, priority or SME with point subtotals.
 - **Table** — spreadsheet-style: pick your columns, edit cells inline, and
@@ -91,22 +128,30 @@ read-only.
 - Rich-text description (round-trips ERPNext's Text Editor HTML field)
 - Dependency panel with live status — **add and remove dependencies here**;
   ERPNext offers no UI for this outside the Desk form's child table
-- **ERP Module Readiness Checklist** tab: check off module sign-offs
+- **Module** picker: roll the task up to an Agile Module, so it counts
+  towards that module's Sign-off gate
+- **ERP Checklist** tab: the superseded readiness grid, now read-only
 - **Time** tab: log hours to standard ERPNext **Timesheets** (submitted, so
   hours roll into `Task.actual_time` and project costing)
 
 ### Project portfolio (`/agile`)
-- Progress rings, done/total task counts, checklist sign-off counts
+- Progress rings, done/total task counts, and modules-live counts (falling back
+  to checklist sign-offs for a project with no modules yet)
 
-### ERP Module Readiness Checklist (custom child table on Project)
-Per module (Accounting, Inventory, CRM, …): System Platform (**Odoo /
-ERPNext**), Configuration Status, Data Migration Status, and a Functional
-Sign-off checkbox. Also editable from Desk on the Project form.
+### ERP Module Readiness Checklist (superseded, frozen)
+The original child table on Project. Every row is migrated to an `Agile Module`
+on upgrade; the grid stays visible but **read-only for one release** as the
+rollback path. Removing one line from `PROPERTY_SETTERS` thaws it.
 
 ### Project progress %
-`Project.percent_complete` is computed server-side on every task/checklist
-change: **70%** complexity-point-weighted task completion + **30%**
-checklist sign-offs (weights in `agile_projects/progress.py`).
+`Project.percent_complete` is computed server-side on every task or gate
+change: **70%** complexity-point-weighted task completion + **30%** module
+readiness (weights in `agile_projects/progress.py`).
+
+Readiness is **gate position**, not a checkbox — `Configure 0 · Migrate 0.25 ·
+UAT 0.5 · Sign-off 0.75 · Live 1.0` — so a module that is migrated and in UAT
+scores 50% where the old binary sign-off scored it 0. A project with no modules
+yet still scores off its legacy checklist rows.
 
 ## Installation
 
@@ -130,7 +175,14 @@ an active **Employee** record whose *User ID* is the logged-in user.
   Pending Review→QA/Code Review, Overdue→To Do, Completed/Cancelled→Done,
   Template→Backlog)
 - Custom fields: `Task.complexity_points`, `Task.sme_responsible`,
-  `Project.erp_module_readiness` (Table → *ERP Module Readiness Checklist*)
+  `Task.agile_module` (Link → *Agile Module*),
+  `Project.erp_module_readiness` (Table → *ERP Module Readiness Checklist*,
+  now read-only)
+- New doctypes: **Agile Module** (gates) and **Cutover Step** (runbook)
+- A `[post_model_sync]` patch creates one Agile Module per existing checklist
+  row, deriving the gate conservatively from what the row can evidence and
+  **never** deriving *Live*. It is idempotent per (project, module), additive,
+  and changes no existing row
 - `override_doctype_class` for **Task** (`AgileTask`): dependency gate,
   Done→100% progress, completion stamps, dependent-task rescheduling keyed
   on Backlog/To Do, auto-start to In Progress on the first submitted
@@ -163,6 +215,16 @@ built `www/agile.html` receives the CSRF token via server-rendered boot
 `agile_projects/public/frontend/` and copies the built `index.html` to
 `agile_projects/www/agile.html`. Both are gitignored build artifacts.
 
+## Tests
+
+```bash
+bench --site yoursite run-tests --app agile_projects
+```
+
+`agile_projects/tests/test_gates.py` covers the gate model, the migration's
+derivation ladder and progress blending as pure functions (no database).
+`test_agile_module.py` exercises the three gate rules against real documents.
+
 ## API surface
 
 All endpoints live in `agile_projects/api.py`, are whitelisted, go through
@@ -192,6 +254,18 @@ View endpoints live in `agile_projects/views.py`:
 | `get_my_work` | Cross-project assignments, bucketed |
 | `get_views` / `save_view` / `delete_view` | Per-user saved views |
 
+Module gates and cutover live in `agile_projects/modules.py`:
+
+| Endpoint | Purpose |
+|---|---|
+| `get_modules` | Modules grouped into gate columns, with batched task rollup |
+| `update_module_gate` | The enforced gate transition |
+| `create_module` / `update_module` / `delete_module` | Module CRUD (field allowlist) |
+| `reorder_gate` | Persist card order within a gate column |
+| `get_cutover` / `add_cutover_step` / `update_cutover_step` / `delete_cutover_step` | Runbook CRUD |
+| `start_step` / `complete_step` / `signoff_step` | Runbook execution, stamping actual times |
+| `reorder_cutover` | Re-sequence the runbook |
+
 ## Known limitations
 
 - The Desk *Project → Set Status* action writes legacy Task statuses via a
@@ -199,8 +273,11 @@ View endpoints live in `agile_projects/views.py`:
   statuses on their next save.
 - Uninstalling the app does not revert the status Property Setter or map
   statuses back to ERPNext defaults.
-- Card order *within* a column is not persisted (drag between columns is a
-  status change); a `kanban_order` field is a planned enhancement.
+- The legacy readiness checklist is frozen, not removed. Uninstalling does not
+  restore it to editable — drop the `Project-erp_module_readiness-read_only`
+  Property Setter.
+- A module's gate is not derived from its tasks; someone has to move it. That
+  is deliberate — a gate is an assertion, not a calculation.
 
 ## License
 

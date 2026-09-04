@@ -8,6 +8,7 @@ setters. Everything here is idempotent.
 import frappe
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 from frappe.custom.doctype.property_setter.property_setter import make_property_setter
+from frappe.utils import cint
 
 AGILE_STATUSES = ["Backlog", "To Do", "In Progress", "QA/Code Review", "Blocked", "Done"]
 AGILE_STATUS_OPTIONS = "\n".join(AGILE_STATUSES)
@@ -65,6 +66,19 @@ CUSTOM_FIELDS = {
             "no_copy": 1,
             "search_index": 1,
         },
+        {
+            # Rolls a task up to the module whose gate it gates. Link options
+            # name a doctype this app defines, which is why this lives in
+            # ensure_customizations() — Frappe syncs the app's doctypes before
+            # both after_install and after_migrate, so the target always exists.
+            "fieldname": "agile_module",
+            "label": "Module",
+            "fieldtype": "Link",
+            "options": "Agile Module",
+            "insert_after": "board_order",
+            "in_standard_filter": 1,
+            "search_index": 1,
+        },
     ],
     "Project": [
         {
@@ -92,12 +106,17 @@ PROPERTY_SETTERS = [
     ("Task", "completed_on", "depends_on", 'eval: doc.status == "Done"', "Text"),
     # AgileTask.set_completion_fields fills completed_on itself
     ("Task", "completed_on", "mandatory_depends_on", "", "Text"),
+    # Superseded by the Agile Module doctype. Kept visible but frozen for one
+    # release as the rollback path for the checklist -> modules migration;
+    # removing this line is all it takes to thaw it.
+    ("Project", "erp_module_readiness", "read_only", "1", "Check"),
 ]
 
 
 def after_install():
     ensure_customizations()
     migrate_legacy_task_statuses()
+    migrate_checklist_to_modules()
     recompute_all_project_progress()
 
 
@@ -130,3 +149,88 @@ def recompute_all_project_progress():
 
     for project in frappe.get_all("Project", pluck="name"):
         update_project_progress(project)
+
+
+# ---------------------------------------------------------------------------
+# ERP Module Readiness Checklist -> Agile Module
+# ---------------------------------------------------------------------------
+
+# Conservative ladder: derive the furthest gate the old row can actually
+# evidence. Deliberately never derives "Live" — going live is a human
+# assertion, and a checkbox from the previous data model cannot prove it.
+CONFIG_DONE = ("Configured", "Verified")
+MIGRATION_DONE = ("Migrated", "Validated")
+
+
+def derive_gate(row):
+    """Pure function so it can be unit-tested without a bench."""
+    if cint(row.get("functional_signoff")):
+        return "Sign-off"
+    if row.get("data_migration_status") in MIGRATION_DONE:
+        return "UAT"
+    if row.get("configuration_status") in CONFIG_DONE:
+        return "Migrate"
+    return "Configure"
+
+
+def migrate_checklist_to_modules():
+    """Create one Agile Module per legacy checklist row.
+
+    Idempotent by (project, module_name): a re-run creates nothing, so it is
+    safe on every migrate. Additive — no existing row is modified or deleted,
+    which is what makes the frozen legacy grid a real rollback path.
+    """
+    if not frappe.db.exists("DocType", "ERP Module Readiness Checklist"):
+        return 0
+
+    rows = frappe.get_all(
+        "ERP Module Readiness Checklist",
+        filters={"parenttype": "Project"},
+        fields=[
+            "parent",
+            "module_name",
+            "system_platform",
+            "configuration_status",
+            "data_migration_status",
+            "functional_signoff",
+        ],
+        order_by="parent asc, idx asc",
+    )
+    if not rows:
+        return 0
+
+    existing = {
+        (m.project, m.module_name)
+        for m in frappe.get_all("Agile Module", fields=["project", "module_name"])
+    }
+    live_projects = set(frappe.get_all("Project", pluck="name"))
+
+    created = 0
+    for row in rows:
+        key = (row.parent, row.module_name)
+        # A checklist row can outlive its project (child rows are not always
+        # cleaned up), and a duplicate module_name on one project collapses to
+        # a single Agile Module — the first one wins.
+        if key in existing or row.parent not in live_projects or not row.module_name:
+            continue
+
+        doc = frappe.get_doc(
+            {
+                "doctype": "Agile Module",
+                "project": row.parent,
+                "module_name": row.module_name,
+                "system_platform": row.system_platform or "ERPNext",
+                "gate": derive_gate(row),
+                "configuration_status": row.configuration_status or "Not Started",
+                "data_migration_status": row.data_migration_status or "Not Started",
+                "functional_signoff": cint(row.functional_signoff),
+            }
+        )
+        # The gate is derived from the row's own data, so the forward-transition
+        # rules would be checking the migration against itself.
+        doc.flags.ignore_gate_validation = True
+        doc.insert(ignore_permissions=True)
+        existing.add(key)
+        created += 1
+
+    return created

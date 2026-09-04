@@ -20,7 +20,7 @@
     </div>
 
     <p v-else-if="!rows.length" class="rounded-lg border border-dashed border-gray-300 py-8 text-center text-sm text-gray-500">
-      No modules tracked yet. Add the first one below.
+      {{ readonly ? 'No modules were tracked here.' : 'No modules tracked yet. Add the first one below.' }}
     </p>
 
     <ul v-else class="space-y-2">
@@ -31,11 +31,12 @@
         :class="row.functional_signoff ? 'border-green-200 bg-green-50/50' : 'border-gray-200 bg-white'"
       >
         <div class="flex items-center gap-2">
-          <label class="flex cursor-pointer items-center gap-2">
+          <label class="flex items-center gap-2" :class="readonly ? '' : 'cursor-pointer'">
             <input
               type="checkbox"
-              class="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
+              class="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500 disabled:opacity-60"
               :checked="!!row.functional_signoff"
+              :disabled="readonly"
               @change="updateRow(row, 'functional_signoff', $event.target.checked ? 1 : 0)"
             />
             <span class="text-sm font-medium text-gray-900">{{ row.module_name }}</span>
@@ -51,6 +52,7 @@
           </span>
           <span class="flex-1"></span>
           <button
+            v-if="!readonly"
             class="text-xs text-gray-400 hover:text-red-600"
             title="Remove module"
             @click="removeRow(row)"
@@ -65,7 +67,8 @@
             </label>
             <select
               :value="row.configuration_status"
-              class="mt-0.5 w-full rounded-md border-gray-300 py-1 text-xs focus:border-indigo-500 focus:ring-indigo-500"
+              class="mt-0.5 w-full rounded-md border-gray-300 py-1 text-xs focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-50 disabled:text-gray-500"
+              :disabled="readonly"
               @change="updateRow(row, 'configuration_status', $event.target.value)"
             >
               <option v-for="status in CONFIG_STATUSES" :key="status" :value="status">
@@ -79,7 +82,8 @@
             </label>
             <select
               :value="row.data_migration_status"
-              class="mt-0.5 w-full rounded-md border-gray-300 py-1 text-xs focus:border-indigo-500 focus:ring-indigo-500"
+              class="mt-0.5 w-full rounded-md border-gray-300 py-1 text-xs focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-50 disabled:text-gray-500"
+              :disabled="readonly"
               @change="updateRow(row, 'data_migration_status', $event.target.value)"
             >
               <option v-for="status in MIGRATION_STATUSES" :key="status" :value="status">
@@ -92,7 +96,7 @@
     </ul>
 
     <!-- add row -->
-    <form class="mt-3 flex items-end gap-2" @submit.prevent="addRow">
+    <form v-if="!readonly" class="mt-3 flex items-end gap-2" @submit.prevent="addRow">
       <div class="flex-1">
         <label class="text-[10px] font-medium uppercase tracking-wide text-gray-400">Module</label>
         <select
@@ -134,6 +138,9 @@ import { toast, errorMessage } from '@/utils/toast'
 
 const props = defineProps({
   project: { type: String, required: true },
+  // Superseded by the Agile Module doctype; frozen for one release so the
+  // checklist -> modules migration has a visible rollback path.
+  readonly: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['progress'])
@@ -163,6 +170,7 @@ const signedOff = computed(() => rows.value.filter((row) => row.functional_signo
 const updateResource = createResource({ url: 'agile_projects.api.update_checklist_row' })
 
 function updateRow(row, field, value) {
+  if (props.readonly) return
   const previous = row[field]
   row[field] = value
   updateResource
