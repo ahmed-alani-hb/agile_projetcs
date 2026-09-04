@@ -1,0 +1,165 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "hash",
+ "creation": "2026-09-04 10:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "project",
+  "module_name",
+  "system_platform",
+  "gate",
+  "column_break_1",
+  "sme_responsible",
+  "target_go_live",
+  "gate_order",
+  "readiness_section",
+  "configuration_status",
+  "data_migration_status",
+  "column_break_2",
+  "functional_signoff",
+  "notes_section",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Project",
+   "options": "Project",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "module_name",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Module Name",
+   "options": "Accounting\nInventory\nCRM\nSelling\nBuying\nManufacturing\nHR & Payroll\nProjects\nAssets\nSupport\nWebsite\nOther",
+   "reqd": 1
+  },
+  {
+   "fieldname": "system_platform",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "System Platform",
+   "options": "Odoo\nERPNext",
+   "reqd": 1
+  },
+  {
+   "default": "Configure",
+   "description": "Phase gate. Forward moves are validated; moving a module backwards is always allowed as a correction.",
+   "fieldname": "gate",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Gate",
+   "options": "Configure\nMigrate\nUAT\nSign-off\nLive",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Subject-matter expert accountable for this module",
+   "fieldname": "sme_responsible",
+   "fieldtype": "Link",
+   "label": "SME Responsible",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "target_go_live",
+   "fieldtype": "Date",
+   "label": "Target Go-Live"
+  },
+  {
+   "default": "0",
+   "fieldname": "gate_order",
+   "fieldtype": "Int",
+   "hidden": 1,
+   "label": "Gate Order",
+   "no_copy": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "readiness_section",
+   "fieldtype": "Section Break",
+   "label": "Readiness"
+  },
+  {
+   "default": "Not Started",
+   "fieldname": "configuration_status",
+   "fieldtype": "Select",
+   "label": "Configuration Status",
+   "options": "Not Started\nIn Progress\nConfigured\nVerified"
+  },
+  {
+   "default": "Not Started",
+   "fieldname": "data_migration_status",
+   "fieldtype": "Select",
+   "label": "Data Migration Status",
+   "options": "Not Started\nIn Progress\nMigrated\nValidated"
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "description": "The client's acceptance of this module",
+   "fieldname": "functional_signoff",
+   "fieldtype": "Check",
+   "label": "Functional Sign-off"
+  },
+  {
+   "fieldname": "notes_section",
+   "fieldtype": "Section Break",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-09-04 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Agile Projects",
+ "name": "Agile Module",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "read": 1,
+   "role": "Projects User",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "role": "Projects Manager",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "module_name",
+ "track_changes": 1
+}

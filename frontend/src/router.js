@@ -1,13 +1,29 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { sessionUser } from '@/data/session'
 
-const VIEW_TYPES = ['board', 'list', 'table', 'timeline', 'calendar', 'sheet']
+const VIEW_TYPES = [
+  'board',
+  'list',
+  'table',
+  'timeline',
+  'calendar',
+  'sheet',
+  'modules',
+  'cutover',
+  'dashboard',
+  'roadmap',
+]
 
 const routes = [
   {
     path: '/',
     name: 'ProjectList',
     component: () => import('@/pages/ProjectList.vue'),
+  },
+  {
+    path: '/portfolio',
+    name: 'Portfolio',
+    component: () => import('@/pages/Portfolio.vue'),
   },
   {
     path: '/my-work',

@@ -1,1 +1,5 @@
+[pre_model_sync]
 agile_projects.patches.reconcile_task_statuses
+
+[post_model_sync]
+agile_projects.patches.migrate_readiness_checklist_to_modules

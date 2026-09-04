@@ -65,7 +65,13 @@
               <span class="font-semibold text-gray-900">{{ project.done_tasks }}</span>
               / {{ project.total_tasks }} tasks done
             </div>
-            <div>
+            <!-- Prefer modules; a project not yet migrated still shows its
+                 legacy sign-off count rather than a bare 0/0. -->
+            <div v-if="project.module_total">
+              <span class="font-semibold text-gray-900">{{ project.module_live }}</span>
+              / {{ project.module_total }} modules live
+            </div>
+            <div v-else>
               <span class="font-semibold text-gray-900">{{ project.checklist_signed_off }}</span>
               / {{ project.checklist_total }} sign-offs
             </div>

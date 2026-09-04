@@ -17,11 +17,23 @@
         >
           My Work
         </router-link>
+        <router-link
+          to="/portfolio"
+          class="shrink-0 rounded-md px-2 py-1 text-sm font-medium"
+          :class="
+            $route.name === 'Portfolio'
+              ? 'bg-indigo-50 text-indigo-700'
+              : 'text-gray-500 hover:text-gray-800'
+          "
+        >
+          Portfolio
+        </router-link>
         <div v-if="$slots.default" class="min-w-0 border-l border-gray-200 pl-3">
           <slot />
         </div>
       </div>
       <div class="flex shrink-0 items-center gap-3">
+        <NotificationBell />
         <div class="flex items-center gap-2">
           <img
             v-if="userInfo.data?.user_image"
@@ -50,6 +62,7 @@
 <script setup>
 import { onMounted } from 'vue'
 import { Button } from 'frappe-ui'
+import NotificationBell from './NotificationBell.vue'
 import { session, logout, userInfo } from '@/data/session'
 import { initials } from '@/utils/format'
 

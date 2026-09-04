@@ -17,6 +17,7 @@ from agile_projects.api import (
     _get_blockers,
     normalize_task_dates,
 )
+from agile_projects.collaboration import attach_assignees
 from agile_projects.overrides.task import AGILE_STATUSES, DONE
 
 LIST_FIELDS = [
@@ -28,11 +29,15 @@ LIST_FIELDS = [
     "sme_responsible",
     "exp_start_date",
     "exp_end_date",
+    "act_start_date",
+    "act_end_date",
     "progress",
     "actual_time",
     "expected_time",
     "board_order",
     "project",
+    "agile_module",
+    "_assign",
     "modified",
 ]
 
@@ -41,7 +46,18 @@ LIST_FIELDS = [
 # dependency gate holds.
 BULK_EDITABLE_FIELDS = TASK_EDITABLE_FIELDS | {"status", "blocked_reason"}
 
-VIEW_TYPES = ("board", "list", "table", "timeline", "calendar", "sheet")
+VIEW_TYPES = (
+    "board",
+    "list",
+    "table",
+    "timeline",
+    "calendar",
+    "sheet",
+    "modules",
+    "cutover",
+    "dashboard",
+    "roadmap",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -76,7 +92,7 @@ def _build_filters(project=None, filters=None):
     if status:
         out["status"] = ["in", status] if isinstance(status, (list, tuple)) else status
 
-    for field in ("priority", "sme_responsible"):
+    for field in ("priority", "sme_responsible", "agile_module"):
         value = filters.get(field)
         if value:
             out[field] = ["in", value] if isinstance(value, (list, tuple)) else value
@@ -125,10 +141,13 @@ def _build_filters(project=None, filters=None):
 
 
 def _decorate(tasks):
-    """Attach SME display info and blocker state to a list of task rows."""
+    """Attach SME display info, assignees and blocker state to task rows."""
     if not tasks:
         return tasks
     _attach_employee_info(tasks)
+    # Also strips the raw `_assign` JSON blob, which is an implementation
+    # detail the client has no business parsing.
+    attach_assignees(tasks)
     blockers = _get_blockers([t.name for t in tasks])
     for task in tasks:
         task["blocked_by"] = blockers.get(task.name, [])
@@ -407,6 +426,31 @@ def compute_critical_path(tasks, edges):
         latest_start[node] = finish - duration[node]
 
     return {n for n in by_name if latest_start[n] - earliest_start[n] == 0}
+
+
+@frappe.whitelist()
+def get_critical_path(project, filters=None):
+    """Just the recomputed critical path, without the rest of the payload.
+
+    The timeline deliberately does not reload after a drag — rebuilding the
+    chart throws away the user's scroll position — but a reschedule can change
+    which tasks have zero slack. Without this the red highlighting keeps
+    showing the path from before the drag.
+    """
+    _ensure_app_access()
+    frappe.has_permission("Project", doc=project, throw=True)
+
+    query_filters, or_filters = _build_filters(project, filters)
+    tasks = frappe.get_list(
+        "Task",
+        filters=query_filters,
+        or_filters=or_filters,
+        fields=["name", "exp_start_date", "exp_end_date", "expected_time"],
+        order_by="exp_start_date asc, creation asc",
+        limit_page_length=0,
+    )
+    edges = _dependency_edges([t.name for t in tasks])
+    return {"critical_path": sorted(compute_critical_path(tasks, edges))}
 
 
 @frappe.whitelist(methods=["POST"])

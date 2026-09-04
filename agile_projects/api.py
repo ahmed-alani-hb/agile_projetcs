@@ -53,6 +53,7 @@ TASK_EDITABLE_FIELDS = {
     "expected_time",
     "progress",
     "blocked_reason",
+    "agile_module",
 }
 
 CHECKLIST_EDITABLE_FIELDS = {
@@ -130,6 +131,11 @@ def get_projects():
         filters={"parenttype": "Project", "parent": ["in", names]},
         fields=["parent", "functional_signoff"],
     )
+    module_rows = frappe.get_all(
+        "Agile Module",
+        filters={"project": ["in", names]},
+        fields=["project", "gate"],
+    )
 
     tasks_by_project = {}
     for row in task_counts:
@@ -145,15 +151,27 @@ def get_projects():
         if row.functional_signoff:
             stats["signed_off"] += 1
 
+    modules_by_project = {}
+    for row in module_rows:
+        stats = modules_by_project.setdefault(row.project, {"total": 0, "live": 0})
+        stats["total"] += 1
+        if row.gate == "Live":
+            stats["live"] += 1
+
     for p in projects:
         tstats = tasks_by_project.get(p.name, {})
         cstats = checklist_by_project.get(p.name, {})
+        mstats = modules_by_project.get(p.name, {})
         p.update(
             {
                 "total_tasks": tstats.get("total", 0),
                 "done_tasks": tstats.get("done", 0),
+                # Legacy counters, kept while the frozen checklist grid is the
+                # rollback path — the card prefers modules when it has them.
                 "checklist_total": cstats.get("total", 0),
                 "checklist_signed_off": cstats.get("signed_off", 0),
+                "module_total": mstats.get("total", 0),
+                "module_live": mstats.get("live", 0),
             }
         )
     return projects
@@ -195,6 +213,7 @@ def get_board(project):
             "progress",
             "actual_time",
             "board_order",
+            "_assign",
         ],
         # board_order is our own indexed ordering column (stock Kanban keeps
         # order in an unsortable JSON blob)
@@ -204,6 +223,7 @@ def get_board(project):
 
     blockers = _get_blockers([t.name for t in tasks])
     _attach_employee_info(tasks)
+    _attach_assignees(tasks)
 
     columns = {status: [] for status in AGILE_STATUSES}
     for task in tasks:
@@ -248,6 +268,17 @@ def _get_blockers(task_names):
                 {"task": info.name, "subject": info.subject, "status": info.status}
             )
     return blockers
+
+
+def _attach_assignees(rows):
+    """Decode `_assign` into resolved users.
+
+    Imported here rather than at module scope because collaboration.py imports
+    this module — a top-level import would be circular.
+    """
+    from agile_projects.collaboration import attach_assignees
+
+    attach_assignees(rows)
 
 
 def _attach_employee_info(tasks):
@@ -329,10 +360,15 @@ def get_task(task):
             "completed_on",
             "completed_by",
             "owner",
+            "agile_module",
         )
     }
+    assignee_rows = [{"_assign": doc.get("_assign")}]
+    _attach_assignees(assignee_rows)
+
     out.update(
         {
+            "assignees": assignee_rows[0]["assignees"],
             "project_name": frappe.db.get_value("Project", doc.project, "project_name")
             if doc.project
             else None,

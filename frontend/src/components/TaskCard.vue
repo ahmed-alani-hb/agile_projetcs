@@ -47,6 +47,22 @@
         {{ formatHours(task.actual_time) }}
       </span>
       <span class="flex-1"></span>
+      <!-- assignees first: who is doing it outranks who owns the subject -->
+      <span
+        v-for="person in (task.assignees || []).slice(0, 3)"
+        :key="person.user"
+        class="-ml-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-200 text-[10px] font-semibold text-gray-700 ring-1 ring-white first:ml-0"
+        :title="person.user_name"
+      >
+        {{ initials(person.user_name) }}
+      </span>
+      <span
+        v-if="(task.assignees || []).length > 3"
+        class="-ml-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-100 text-[10px] font-medium text-gray-500 ring-1 ring-white"
+        :title="`${task.assignees.length} assignees`"
+      >
+        +{{ task.assignees.length - 3 }}
+      </span>
       <span
         v-if="task.sme_responsible"
         class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-semibold text-indigo-700"
