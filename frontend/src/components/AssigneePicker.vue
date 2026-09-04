@@ -51,27 +51,23 @@ const props = defineProps({
 
 const emit = defineEmits(['changed'])
 
-// The same cached list EmployeePicker uses; filtered to people who have a
-// login, since an assignment without a User is a dead end.
-const employees = createResource({
-  url: 'agile_projects.api.get_employees',
-  cache: 'agile:employees',
+// Assignment targets a User, so draw from users with app access rather than
+// from Employee — an Employee's user_id link is optional and often blank, which
+// would leave nobody to assign.
+const mentionable = createResource({
+  url: 'agile_projects.collaboration.get_mentionable_users',
+  cache: 'agile:mention_users',
 })
 
 onMounted(() => {
-  if (!employees.data && !employees.loading) employees.fetch()
+  if (!mentionable.data && !mentionable.loading) mentionable.fetch()
 })
 
 const options = computed(() => {
   const taken = new Set(props.assignees.map((person) => person.user))
-  return (employees.data || [])
-    .filter((employee) => employee.user_id && !taken.has(employee.user_id))
-    .map((employee) => ({
-      label: employee.designation
-        ? `${employee.employee_name} · ${employee.designation}`
-        : employee.employee_name,
-      value: employee.user_id,
-    }))
+  return (mentionable.data || [])
+    .filter((user) => !taken.has(user.name))
+    .map((user) => ({ label: user.full_name || user.name, value: user.name }))
 })
 
 const assign = createResource({ url: 'agile_projects.collaboration.assign_task' })

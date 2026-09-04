@@ -24,7 +24,7 @@ from frappe.desk.doctype.notification_log.notification_log import (
 from frappe.desk.form import assign_to
 from frappe.utils import cint, get_fullname, sanitize_html, strip_html
 
-from agile_projects.api import _ensure_app_access
+from agile_projects.api import ALLOWED_ROLES, _ensure_app_access
 
 # Every endpoint below takes a (doctype, name) pair from the client. Without
 # this allowlist `get_comments` would be a read primitive over every doctype on
@@ -304,6 +304,60 @@ def describe_version(data):
             lines.append(f"{verb} {count} {_humanise_field(table)} row{'' if count == 1 else 's'}")
 
     return lines
+
+
+# ---------------------------------------------------------------------------
+# Who can be mentioned or assigned
+# ---------------------------------------------------------------------------
+
+# Defensive cap; the picker also filters client-side, as the rest of the app does.
+MAX_MENTIONABLE = 500
+
+
+@frappe.whitelist()
+def get_mentionable_users(txt=""):
+    """Users who can actually open this app.
+
+    A mention target is a User, not an Employee. Going via Employee — as the
+    first version of this did — silently loses two groups: employees whose
+    optional `user_id` link is blank (the common case on a fresh ERPNext), and
+    anyone with app access who has no Employee record at all, such as a
+    Projects Manager or an admin.
+
+    Roles are the honest scope here: Frappe permissions on Project are
+    role-based rather than per-document, so there is no per-project user list
+    to draw from. Over-listing is safe — `add_comment` re-checks
+    `has_permission(..., user=...)` before notifying anyone, so the picker is a
+    convenience and the server stays the gate.
+    """
+    _ensure_app_access()
+
+    holders = frappe.get_all(
+        "Has Role",
+        filters={"parenttype": "User", "role": ["in", sorted(ALLOWED_ROLES)]},
+        pluck="parent",
+        distinct=True,
+        limit_page_length=0,
+    )
+    if not holders:
+        return []
+
+    filters = {"name": ["in", holders], "enabled": 1, "user_type": "System User"}
+    or_filters = None
+    if txt:
+        or_filters = [
+            ["User", "full_name", "like", f"%{txt}%"],
+            ["User", "name", "like", f"%{txt}%"],
+        ]
+
+    return frappe.get_all(
+        "User",
+        filters=filters,
+        or_filters=or_filters,
+        fields=["name", "full_name", "user_image"],
+        order_by="full_name asc",
+        limit_page_length=MAX_MENTIONABLE,
+    )
 
 
 # ---------------------------------------------------------------------------

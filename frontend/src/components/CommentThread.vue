@@ -60,7 +60,7 @@
           ref="editor"
           :content="draft"
           :editable="true"
-          :mentions="mentionOptions"
+          :mentions="mentionConfig"
           placeholder="Write a comment… type @ to mention someone"
           editor-class="prose-sm max-w-none min-h-[56px] focus:outline-none text-sm"
           @change="(html) => (draft = html)"
@@ -143,19 +143,35 @@ useRealtime('agile_comment', (payload) => {
   thread.data.comments = [...comments.value, payload.comment]
 })
 
-// Mention source: the employee list the app already caches, narrowed to people
-// who actually have a login to be mentioned.
-const employees = createResource({
-  url: 'agile_projects.api.get_employees',
-  cache: 'agile:employees',
+// A mention targets a User. Sourcing this from Employee (as the first version
+// did) drops anyone whose optional Employee.user_id is blank, plus anyone with
+// app access and no Employee record at all.
+const mentionable = createResource({
+  url: 'agile_projects.collaboration.get_mentionable_users',
+  cache: 'agile:mention_users',
   auto: true,
 })
 
+// `value` becomes the mention's data-id, which the server reads back out of the
+// saved HTML to decide who to notify.
 const mentionOptions = computed(() =>
-  (employees.data || [])
-    .filter((employee) => employee.user_id)
-    .map((employee) => ({ label: employee.employee_name, value: employee.user_id }))
+  (mentionable.data || []).map((user) => ({
+    label: user.full_name || user.name,
+    value: user.name,
+  }))
 )
+
+// Deliberately the object-with-getter form, and it must stay that way.
+// frappe-ui's TextEditor builds its extensions exactly once in onMounted and
+// never watches this prop, so handing it a plain array snapshots whatever the
+// array was at mount — for an async list, permanently empty, with no error
+// because `[] && ...` is truthy. The mention extension's own option type is
+// MaybeRefOrGetter and it calls toValue() on every keystroke, but the array
+// branch of TextEditor's `Array.isArray(props.mentions)` check is what freezes
+// it; only the object branch forwards `.mentions` raw to toValue. Hence a
+// getter inside an object. Simplifying this back to `:mentions="mentionOptions"`
+// reintroduces the bug silently.
+const mentionConfig = { mentions: () => mentionOptions.value }
 
 const hasDraft = computed(() => {
   const text = String(draft.value || '')

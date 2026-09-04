@@ -184,3 +184,46 @@ class TestCommentableAllowlist(unittest.TestCase):
         )
         for risky in ("User", "File", "Comment", "Notification Log", "System Settings"):
             self.assertNotIn(risky, COMMENTABLE)
+
+
+class TestMentionWiring(unittest.TestCase):
+    """Guards for a bug unit tests could not otherwise reach.
+
+    Typing @ showed nobody for two independent reasons, and both live at
+    integration seams rather than inside a function:
+
+    1. frappe-ui's TextEditor builds its extensions once in onMounted and never
+       watches the `mentions` prop, so a plain array is snapshotted — empty, for
+       an async list. Only the object-with-getter form survives to the
+       extension's per-keystroke `toValue()`.
+    2. Mentions were sourced from Employee, whose `user_id` link is optional and
+       routinely blank, so the list could be empty regardless.
+
+    These assert the shape of the fix rather than its behaviour, because the
+    behaviour lives in the browser.
+    """
+
+    def spa_file(self, name):
+        import pathlib
+
+        root = pathlib.Path(__file__).resolve().parents[2]
+        return (root / "frontend" / "src" / "components" / name).read_text()
+
+    def test_the_mention_prop_keeps_its_getter_form(self):
+        source = self.spa_file("CommentThread.vue")
+        self.assertIn("mentions: () =>", source)
+        # Check the markup only: the script's comment names the broken form on
+        # purpose, as a warning, and must not trip this guard.
+        template = source.split("</template>")[0]
+        self.assertIn(':mentions="mentionConfig"', template)
+        self.assertNotIn(':mentions="mentionOptions"', template)
+
+    def test_mentions_and_assignment_draw_from_users_not_employees(self):
+        for name in ("CommentThread.vue", "AssigneePicker.vue"):
+            source = self.spa_file(name)
+            self.assertIn("collaboration.get_mentionable_users", source, name)
+            self.assertNotIn("api.get_employees", source, name)
+
+    def test_sme_picker_still_uses_employees(self):
+        # SME Responsible is a genuine Link -> Employee and must stay one.
+        self.assertIn("api.get_employees", self.spa_file("EmployeePicker.vue"))

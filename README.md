@@ -327,6 +327,7 @@ Collaboration lives in `agile_projects/collaboration.py`:
 | `get_attachments` / `delete_attachment` | Files (uploads go through Frappe's own `upload_file`) |
 | `get_activity` | Field changes and comments as one timeline |
 | `get_notifications` / `mark_notification_read` / `mark_all_notifications_read` | The header bell |
+| `get_mentionable_users` | Users with app access — the source for @mentions and assignment |
 
 ## Known limitations
 
@@ -344,6 +345,10 @@ Collaboration lives in `agile_projects/collaboration.py`:
   on the next fetch. Publishing from a `Comment` doc_event would fix that at
   the cost of firing site-wide for every Like and Info comment.
 - Boards do not live-sync. Someone else's card move shows on your next refresh.
+- @mentions and assignment list **users with an app role**, not employees.
+  `Employee.user_id` is optional in ERPNext and usually blank, so sourcing them
+  from Employee silently hid most people. *SME Responsible* is still a genuine
+  Link → Employee and is unaffected.
 
 ## License
 
